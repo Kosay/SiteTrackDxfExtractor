@@ -231,12 +231,7 @@ public partial class Form1 : Form
                 case MText mtext:
                     CollectText(mtext.Value, mtext.Position.X, mtext.Position.Y, layoutName);
                     break;
-                case netDxf.Entities.Text txt:
-                    CollectText(txt.Value, txt.Position.X, txt.Position.Y);
-                    break;
-                case MText mtext:
-                    CollectText(mtext.Value, mtext.Position.X, mtext.Position.Y);
-                    break;
+
             }
         }
     }
