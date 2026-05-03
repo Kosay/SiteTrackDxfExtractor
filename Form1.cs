@@ -778,7 +778,8 @@ public partial class Form1 : Form
             sb.AppendLine($"      \"name\": \"{JsonEscape(nd.Id)}\",");
             sb.AppendLine($"      \"E\": {nd.E.ToString("F6", ic)},");
             sb.AppendLine($"      \"N\": {nd.N.ToString("F6", ic)},");
-            sb.AppendLine($"      \"layer\": \"{JsonEscape(nd.Layer)}\"");
+            sb.AppendLine($"      \"layer\": \"{JsonEscape(nd.Layer)}\",");
+            sb.AppendLine("      \"properties\": {}");
             sb.AppendLine($"    }}{comma}");
         }
 
