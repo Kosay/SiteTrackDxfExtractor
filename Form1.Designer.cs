@@ -33,6 +33,7 @@ partial class Form1
     private NumericUpDown nudTextRadius = null!;
     private Label lblTextRadUnit = null!;
     private Button btnExportSiteTrack = null!;
+    private Button btnExportAutoCAD = null!;
 
     // Bottom panel
     private Panel pnlBottom = null!;
@@ -74,6 +75,7 @@ partial class Form1
         nudTextRadius      = new NumericUpDown();
         lblTextRadUnit     = new Label();
         btnExportSiteTrack = new Button();
+        btnExportAutoCAD   = new Button();
 
         pnlBottom          = new Panel();
         btnExport          = new Button();
@@ -191,7 +193,8 @@ partial class Form1
             lblRoleLabel, cmbRole,
             lblTolLabel, nudTolerance, lblTolUnit,
             lblTextRadLabel, nudTextRadius, lblTextRadUnit,
-            btnExportSiteTrack
+            btnExportSiteTrack,
+            btnExportAutoCAD
         });
 
         lblRolesTitle.Text      = "Layer Roles";
@@ -271,6 +274,17 @@ partial class Form1
         btnExportSiteTrack.FlatAppearance.BorderColor = Color.FromArgb(0, 120, 110);
         btnExportSiteTrack.Cursor                    = Cursors.Hand;
         btnExportSiteTrack.Click                    += btnExportSiteTrack_Click;
+
+        btnExportAutoCAD.Text                        = "Export AutoCAD Data";
+        btnExportAutoCAD.Location                    = new Point(8, 392);
+        btnExportAutoCAD.Size                        = new Size(214, 38);
+        btnExportAutoCAD.FlatStyle                   = FlatStyle.Flat;
+        btnExportAutoCAD.BackColor                   = Color.FromArgb(63, 81, 181);
+        btnExportAutoCAD.ForeColor                   = Color.White;
+        btnExportAutoCAD.Font                        = new Font("Segoe UI", 9.5F, FontStyle.Bold);
+        btnExportAutoCAD.FlatAppearance.BorderColor  = Color.FromArgb(48, 63, 159);
+        btnExportAutoCAD.Cursor                      = Cursors.Hand;
+        btnExportAutoCAD.Click                      += btnExportAutoCAD_Click;
 
         // ── BOTTOM PANEL ─────────────────────────────────────
         pnlBottom.BackColor = Color.FromArgb(240, 243, 248);

@@ -891,6 +891,37 @@ public partial class Form1 : Form
         return Math.Sqrt(dx * dx + dy * dy);
     }
 
+    // ─── AutoCAD Export Button Handler ────────────────────────
+    private void btnExportAutoCAD_Click(object sender, EventArgs e)
+    {
+        if (_extractedAutoCADData == null)
+        {
+            MessageBox.Show(
+                "No AutoCAD data to export.\n\n" +
+                "Steps:\n" +
+                "1. Open a DXF file in AutoCAD\n" +
+                "2. Select objects in AutoCAD\n" +
+                "3. Run 'getData' command in AutoCAD\n" +
+                "4. This app will receive the data\n" +
+                "5. Click this button to export",
+                "No AutoCAD Data",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        using var dlg = new SaveFileDialog
+        {
+            Title = "Export AutoCAD Data as JSON",
+            Filter = "JSON Files (*.json)|*.json",
+            FileName = "sitetrack_data.json"
+        };
+
+        if (dlg.ShowDialog() != DialogResult.OK) return;
+
+        ExportAutoCADDataAsJson(dlg.FileName);
+    }
+
     // ─── AutoCAD Export ───────────────────────────────────────
     private void ExportAutoCADDataAsJson(string baseFileName)
     {
