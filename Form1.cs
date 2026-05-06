@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO.Pipes;
 using System.Text;
 using System.Text.RegularExpressions;
 using netDxf;
@@ -8,6 +9,7 @@ using netDxf.Blocks;
 using netDxf.Entities;
 using netDxf.Header;
 using netDxf.Objects;
+using Newtonsoft.Json;
 using DxfPoint = netDxf.Entities.Point;
 
 namespace DxfCoordinateExtractor;
@@ -79,10 +81,179 @@ public partial class Form1 : Form
     private readonly List<PipeLabelEntity> _pipeLabels = new();
     private readonly Dictionary<string, LayerRole> _layerRoles = new();
 
+    // AutoCAD Bridge - Named Pipe IPC
+    private NamedPipeServerStream? _pipeServer;
+    private Thread? _pipeListenerThread;
+    private bool _listeningForAutoCAD = false;
+    private AutoCADExportData? _extractedAutoCADData;
+
     public Form1()
     {
         InitializeComponent();
         SetupGrid();
+        StartAutoCADListener();
+    }
+
+    // ─── AutoCAD Bridge - Named Pipe Listening ────────────────
+    private void StartAutoCADListener()
+    {
+        _listeningForAutoCAD = true;
+        _pipeListenerThread = new Thread(ListenForAutoCADData)
+        {
+            IsBackground = true,
+            Name = "AutoCAD_Pipe_Listener"
+        };
+        _pipeListenerThread.Start();
+    }
+
+    private void ListenForAutoCADData()
+    {
+        const string pipeName = "SiteTrackDxfBridgePipe";
+
+        try
+        {
+            while (_listeningForAutoCAD)
+            {
+                _pipeServer = new NamedPipeServerStream(
+                    pipeName,
+                    PipeDirection.In,
+                    1,
+                    PipeTransmissionMode.Message
+                );
+
+                _pipeServer.WaitForConnection();
+
+                using (var reader = new StreamReader(_pipeServer, Encoding.UTF8))
+                {
+                    string? jsonData = reader.ReadLine();
+
+                    if (!string.IsNullOrEmpty(jsonData))
+                    {
+                        Invoke(() => ProcessAutoCADData(jsonData));
+                    }
+                }
+
+                _pipeServer.Disconnect();
+                _pipeServer.Dispose();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when app closes
+        }
+        catch (Exception ex)
+        {
+            Invoke(() =>
+                MessageBox.Show($"AutoCAD Bridge Error:\n{ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            );
+        }
+    }
+
+    private void ProcessAutoCADData(string jsonData)
+    {
+        try
+        {
+            _extractedAutoCADData = JsonConvert.DeserializeObject<AutoCADExportData>(jsonData);
+
+            if (_extractedAutoCADData != null)
+            {
+                DisplayAutoCADData(_extractedAutoCADData);
+                lblStatus.Text = $"✓ Received from AutoCAD: {_extractedAutoCADData.Points.Count} points, " +
+                                 $"{_extractedAutoCADData.Lines.Count} lines, " +
+                                 $"{_extractedAutoCADData.Curves.Count} curves, " +
+                                 $"{_extractedAutoCADData.Texts.Count} texts";
+            }
+        }
+        catch (JsonException ex)
+        {
+            MessageBox.Show($"JSON Parse Error:\n{ex.Message}", "Error",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error Processing AutoCAD Data:\n{ex.Message}", "Error",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void DisplayAutoCADData(AutoCADExportData data)
+    {
+        // Clear current grid
+        _allRows.Clear();
+
+        // Add points
+        foreach (var point in data.Points)
+        {
+            _allRows.Add(new EntityRow
+            {
+                EntityType = "POINT",
+                Layer = point.Layer,
+                Label = $"{point.Name} ({point.E:F2}, {point.N:F2})",
+                SourceLayout = "AutoCAD",
+                X = point.E.ToString("F6"),
+                Y = point.N.ToString("F6"),
+                Z = "0",
+                IsSelected = false
+            });
+        }
+
+        // Add lines
+        foreach (var line in data.Lines)
+        {
+            var length = Math.Sqrt(
+                Math.Pow(line.EndE - line.StartE, 2) +
+                Math.Pow(line.EndN - line.StartN, 2)
+            );
+
+            _allRows.Add(new EntityRow
+            {
+                EntityType = "LINE",
+                Layer = line.Layer,
+                Label = $"{line.Name} ({length:F2}m)",
+                SourceLayout = "AutoCAD",
+                X = line.StartE.ToString("F6"),
+                Y = line.StartN.ToString("F6"),
+                Z = "0",
+                IsSelected = false
+            });
+        }
+
+        // Add curves
+        foreach (var curve in data.Curves)
+        {
+            _allRows.Add(new EntityRow
+            {
+                EntityType = curve.Properties.ContainsKey("radius") ? "ARC" : "CIRCLE",
+                Layer = curve.Layer,
+                Label = $"{curve.Name} (R:{curve.Radius:F2})",
+                SourceLayout = "AutoCAD",
+                X = curve.CenterE.ToString("F6"),
+                Y = curve.CenterN.ToString("F6"),
+                Z = "0",
+                IsSelected = false
+            });
+        }
+
+        // Add texts
+        foreach (var text in data.Texts)
+        {
+            _allRows.Add(new EntityRow
+            {
+                EntityType = "TEXT",
+                Layer = text.Layer,
+                Label = text.Content,
+                SourceLayout = "AutoCAD",
+                X = text.E.ToString("F6"),
+                Y = text.N.ToString("F6"),
+                Z = "0",
+                IsSelected = false
+            });
+        }
+
+        // Refresh display
+        PopulateLayerFilter();
+        BindGrid(null, null);
     }
 
     // ─── Grid setup ───────────────────────────────────────────
@@ -718,6 +889,127 @@ public partial class Form1 : Form
     {
         var dx = x1 - x2; var dy = y1 - y2;
         return Math.Sqrt(dx * dx + dy * dy);
+    }
+
+    // ─── AutoCAD Export ───────────────────────────────────────
+    private void ExportAutoCADDataAsJson(string baseFileName)
+    {
+        if (_extractedAutoCADData == null)
+        {
+            MessageBox.Show("No AutoCAD data to export.", "No Data",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            var path = baseFileName.EndsWith(".json")
+                ? baseFileName
+                : baseFileName + ".json";
+
+            WriteAutoCADJson(path, _extractedAutoCADData);
+
+            lblStatus.Text = $"✓ Exported to {Path.GetFileName(path)}";
+
+            if (MessageBox.Show("JSON exported. Open it now?", "Done",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Export failed:\n{ex.Message}", "Error",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void WriteAutoCADJson(string path, AutoCADExportData data)
+    {
+        var ic = CultureInfo.InvariantCulture;
+        var sb = new StringBuilder();
+
+        sb.AppendLine("{");
+        sb.AppendLine("  \"schemaVersion\": 1,");
+        sb.AppendLine($"  \"exportedAt\": \"{DateTime.UtcNow:O}\",");
+        sb.AppendLine($"  \"source\": \"{JsonEscape(data.Source)}\",");
+        sb.AppendLine($"  \"coordinateSystemHint\": \"{JsonEscape(data.CoordinateSystemHint)}\",");
+
+        // Points
+        sb.AppendLine("  \"points\": [");
+        for (var i = 0; i < data.Points.Count; i++)
+        {
+            var pt = data.Points[i];
+            var comma = i < data.Points.Count - 1 ? "," : "";
+            sb.AppendLine("    {");
+            sb.AppendLine($"      \"id\": \"{JsonEscape(pt.Id)}\",");
+            sb.AppendLine($"      \"name\": \"{JsonEscape(pt.Name)}\",");
+            sb.AppendLine($"      \"E\": {pt.E.ToString("F6", ic)},");
+            sb.AppendLine($"      \"N\": {pt.N.ToString("F6", ic)},");
+            sb.AppendLine($"      \"layer\": \"{JsonEscape(pt.Layer)}\",");
+            sb.AppendLine("      \"properties\": {}");
+            sb.AppendLine($"    }}{comma}");
+        }
+        sb.AppendLine("  ],");
+
+        // Lines (with explicit coordinates)
+        sb.AppendLine("  \"lines\": [");
+        for (var i = 0; i < data.Lines.Count; i++)
+        {
+            var ln = data.Lines[i];
+            ln.CalculateLength();
+            var comma = i < data.Lines.Count - 1 ? "," : "";
+            sb.AppendLine("    {");
+            sb.AppendLine($"      \"id\": \"{JsonEscape(ln.Id)}\",");
+            sb.AppendLine($"      \"name\": \"{JsonEscape(ln.Name)}\",");
+            sb.AppendLine($"      \"startE\": {ln.StartE.ToString("F6", ic)},");
+            sb.AppendLine($"      \"startN\": {ln.StartN.ToString("F6", ic)},");
+            sb.AppendLine($"      \"endE\": {ln.EndE.ToString("F6", ic)},");
+            sb.AppendLine($"      \"endN\": {ln.EndN.ToString("F6", ic)},");
+            sb.AppendLine($"      \"length\": {ln.Length.ToString("F3", ic)},");
+            sb.AppendLine($"      \"layer\": \"{JsonEscape(ln.Layer)}\",");
+            sb.AppendLine("      \"properties\": {}");
+            sb.AppendLine($"    }}{comma}");
+        }
+        sb.AppendLine("  ],");
+
+        // Curves
+        sb.AppendLine("  \"curves\": [");
+        for (var i = 0; i < data.Curves.Count; i++)
+        {
+            var cv = data.Curves[i];
+            var comma = i < data.Curves.Count - 1 ? "," : "";
+            sb.AppendLine("    {");
+            sb.AppendLine($"      \"id\": \"{JsonEscape(cv.Id)}\",");
+            sb.AppendLine($"      \"name\": \"{JsonEscape(cv.Name)}\",");
+            sb.AppendLine($"      \"centerE\": {cv.CenterE.ToString("F6", ic)},");
+            sb.AppendLine($"      \"centerN\": {cv.CenterN.ToString("F6", ic)},");
+            sb.AppendLine($"      \"radius\": {cv.Radius.ToString("F3", ic)},");
+            sb.AppendLine($"      \"startAngle\": {cv.StartAngle.ToString("F2", ic)},");
+            sb.AppendLine($"      \"endAngle\": {cv.EndAngle.ToString("F2", ic)},");
+            sb.AppendLine($"      \"layer\": \"{JsonEscape(cv.Layer)}\",");
+            sb.AppendLine("      \"properties\": {}");
+            sb.AppendLine($"    }}{comma}");
+        }
+        sb.AppendLine("  ],");
+
+        // Texts
+        sb.AppendLine("  \"texts\": [");
+        for (var i = 0; i < data.Texts.Count; i++)
+        {
+            var tx = data.Texts[i];
+            var comma = i < data.Texts.Count - 1 ? "," : "";
+            sb.AppendLine("    {");
+            sb.AppendLine($"      \"id\": \"{JsonEscape(tx.Id)}\",");
+            sb.AppendLine($"      \"content\": \"{JsonEscape(tx.Content)}\",");
+            sb.AppendLine($"      \"E\": {tx.E.ToString("F6", ic)},");
+            sb.AppendLine($"      \"N\": {tx.N.ToString("F6", ic)},");
+            sb.AppendLine($"      \"layer\": \"{JsonEscape(tx.Layer)}\",");
+            sb.AppendLine("      \"properties\": {}");
+            sb.AppendLine($"    }}{comma}");
+        }
+        sb.AppendLine("  ]");
+
+        sb.AppendLine("}");
+        File.WriteAllText(path, sb.ToString(), new UTF8Encoding(false));
     }
 
     // ─── CSV / JSON builders ──────────────────────────────────
