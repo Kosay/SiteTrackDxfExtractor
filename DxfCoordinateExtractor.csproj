@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <PackageReference Include="netDxf" Version="2023.11.10" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
 </Project>
