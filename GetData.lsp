@@ -7,7 +7,8 @@
 ;;; Extracts: Points, Lines, Curves (Arcs), and Text
 ;;; Sends via Named Pipe to WinForms app
 
-(defun c:getData (/ ss i ent obj type points lines curves texts idx)
+(defun c:getData (/ ss i ent obj type points lines curves texts idx
+                     point-data line-data curve-data text-data)
   "Extract selected objects and send to helper app"
 
   (princ "\n>>> SiteTrack Bridge - Getting Data from Selection...\n")
@@ -166,29 +167,34 @@
 )
 
 ;;; Get vertices from LWPOLYLINE
-(defun get-lwpolyline-points (ent / obj pts idx pt)
+(defun get-lwpolyline-points (ent / obj pts pt i)
   (setq obj (entget ent))
   (setq pts (list))
-  (setq idx 0)
 
-  (while (setq pt (cdr (assoc (+ 10 idx) obj)))
-    (setq pts (cons pt pts))
-    (setq idx (+ idx 1))
+  ;; Walk entire association list, collecting every code 10 (vertex)
+  (foreach item obj
+    (if (= (car item) 10)
+      (setq pts (cons (cdr item) pts))
+    )
   )
 
+  ;; Return in original order
   (reverse pts)
 )
 
 ;;; Extract ARC
-(defun extract-arc (ent obj / center radius start-angle end-angle layer)
+(defun extract-arc (ent obj / center radius start-angle end-angle layer id)
   (setq center (cdr (assoc 10 obj)))
   (setq radius (cdr (assoc 40 obj)))
   (setq start-angle (cdr (assoc 50 obj)))
   (setq end-angle (cdr (assoc 51 obj)))
   (setq layer (cdr (assoc 8 obj)))
+  (setq id (strcat "arc-" (itoa (rem (abs (sslength (ssget))) 10000))))
 
   (list
-    (list "type" "ARC")
+    (list "id" id)
+    (list "name" id)
+    (list "entityType" "ARC")
     (list "centerE" (nth 0 center))
     (list "centerN" (nth 1 center))
     (list "radius" radius)
@@ -199,13 +205,16 @@
 )
 
 ;;; Extract CIRCLE
-(defun extract-circle (ent obj / center radius layer)
+(defun extract-circle (ent obj / center radius layer id)
   (setq center (cdr (assoc 10 obj)))
   (setq radius (cdr (assoc 40 obj)))
   (setq layer (cdr (assoc 8 obj)))
+  (setq id (strcat "circ-" (itoa (rem (abs (sslength (ssget))) 10000))))
 
   (list
-    (list "type" "CIRCLE")
+    (list "id" id)
+    (list "name" id)
+    (list "entityType" "CIRCLE")
     (list "centerE" (nth 0 center))
     (list "centerN" (nth 1 center))
     (list "radius" radius)
@@ -247,34 +256,39 @@
 )
 
 ;;; Remove MTEXT formatting codes
-(defun remove-mtext-formatting (str / result)
+(defun remove-mtext-formatting (str / result i j k)
   (setq result str)
-  ;; Remove {\ ... } blocks but keep content
-  (while (wcmatch result "*{\\*")
-    (setq result (regex_replace result "{\\\\[^;]*;([^}]*)" "$1"))
+  ;; Replace each {\...; content} with just the content
+  (while (and (vl-string-search "{\\\\\\\" result)
+              (vl-string-search ";" result)
+              (vl-string-search "}" result))
+    (setq i (vl-string-search "{\\\\\\\" result))
+    (if i
+      (progn
+        (setq j (vl-string-search ";" result i))
+        (setq k (vl-string-search "}" result j))
+        (if (and j k (> j i) (> k j))
+          ;; Extract content between ; and }, then rebuild string
+          (setq result (strcat (substr result 1 i)
+                               (substr result (+ j 2) (- k j 1))
+                               (substr result (+ k 2))))
+          ;; Safety: remove the opening if no closing found
+          (setq result (vl-string-subst "" "{\\\\\\\" result))
+        )
+      )
+      (setq result str)
+    )
   )
   result
 )
 
-;;; Simple regex replacement (limited support in LISP)
-(defun regex_replace (str pattern replacement / )
-  ;; This is a simplified version - full regex not available in standard LISP
-  ;; For AutoCAD 2007, we use basic string replacement
-  str
-)
-
-;;; Send data to WinForms app via named pipe
+;;; Send data to WinForms app via file-based handshake
 (defun send-to-pipe (points lines curves texts / json-str)
   (setq json-str (build-json points lines curves texts))
 
-  ;; Write to named pipe
-  ;; Using vlisp-senddata if available, otherwise use file-based approach
+  ;; Write JSON to Documents folder - the WinForms app watches this file
   (if (> (strlen json-str) 0)
-    (progn
-      ;; Write JSON to a temporary file in Documents
-      (write-json-file json-str)
-      ;; In production, use proper IPC - for now, file-based is fallback
-    )
+    (write-json-file json-str)
   )
 )
 
@@ -336,14 +350,33 @@
   json-str
 )
 
+;;; Escape special characters for JSON strings
+(defun json-escape (s / out i c)
+  (setq out "" i 1)
+  (repeat (strlen s)
+    (setq c (substr s i 1) i (1+ i))
+    (cond
+      ((= c "\\") (setq out (strcat out "\\\\")))
+      ((= c "\"") (setq out (strcat out "\\\"")))
+      ((= c "\n") (setq out (strcat out "\\n")))
+      ((= c "\r") (setq out (strcat out "\\r")))
+      ((= c "\t") (setq out (strcat out "\\t")))
+      (T          (setq out (strcat out c)))
+    )
+  )
+  out
+)
+
 ;;; Convert value to JSON
-(defun value-to-json (val / )
+(defun value-to-json (val / num-str)
   (cond
     ((stringp val)
-      (strcat "\"" val "\"")
+      (strcat "\"" (json-escape val) "\"")
     )
     ((numberp val)
-      (rtos val 2)
+      ;; Format number with 6 decimals, ensure '.' not ','
+      (setq num-str (rtos val 2 6))
+      (vl-string-subst "." "," num-str)
     )
     ((= val T)
       "true"

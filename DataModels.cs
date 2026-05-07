@@ -8,7 +8,7 @@ namespace DxfCoordinateExtractor;
 /// </summary>
 public class AutoCADExportData
 {
-    public string SchemaVersion { get; set; } = "1.0";
+    public int SchemaVersion { get; set; } = 1;
     public DateTime ExportedAt { get; set; } = DateTime.UtcNow;
     public string Source { get; set; } = "AutoCAD";
     public string CoordinateSystemHint { get; set; } = "UTM";
@@ -69,6 +69,7 @@ public class CurveData
 {
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
+    public string EntityType { get; set; } = "ARC"; // "ARC" or "CIRCLE"
 
     public double CenterE { get; set; }
     public double CenterN { get; set; }

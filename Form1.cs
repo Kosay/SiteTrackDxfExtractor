@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO.Pipes;
 using System.Text;
 using System.Text.RegularExpressions;
 using netDxf;
@@ -81,72 +80,80 @@ public partial class Form1 : Form
     private readonly List<PipeLabelEntity> _pipeLabels = new();
     private readonly Dictionary<string, LayerRole> _layerRoles = new();
 
-    // AutoCAD Bridge - Named Pipe IPC
-    private NamedPipeServerStream? _pipeServer;
-    private Thread? _pipeListenerThread;
-    private bool _listeningForAutoCAD = false;
+    // AutoCAD Bridge - File-based handshake
+    private FileSystemWatcher? _autoCADWatcher;
     private AutoCADExportData? _extractedAutoCADData;
+    private readonly string _autoCADJsonPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+        "sitetrack_data.json"
+    );
 
     public Form1()
     {
         InitializeComponent();
         SetupGrid();
-        StartAutoCADListener();
     }
 
-    // ─── AutoCAD Bridge - Named Pipe Listening ────────────────
-    private void StartAutoCADListener()
+    protected override void OnHandleCreated(EventArgs e)
     {
-        _listeningForAutoCAD = true;
-        _pipeListenerThread = new Thread(ListenForAutoCADData)
+        base.OnHandleCreated(e);
+        StartAutoCADFileWatcher();
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        base.OnFormClosing(e);
+        if (_autoCADWatcher != null)
         {
-            IsBackground = true,
-            Name = "AutoCAD_Pipe_Listener"
-        };
-        _pipeListenerThread.Start();
+            _autoCADWatcher.EnableRaisingEvents = false;
+            _autoCADWatcher.Dispose();
+        }
     }
 
-    private void ListenForAutoCADData()
+    // ─── AutoCAD Bridge - File Watcher ────────────────────────
+    private void StartAutoCADFileWatcher()
     {
-        const string pipeName = "SiteTrackDxfBridgePipe";
-
         try
         {
-            while (_listeningForAutoCAD)
+            var docsPath = Path.GetDirectoryName(_autoCADJsonPath) ?? "";
+            if (string.IsNullOrEmpty(docsPath)) return;
+
+            _autoCADWatcher = new FileSystemWatcher(docsPath, "sitetrack_data.json")
             {
-                _pipeServer = new NamedPipeServerStream(
-                    pipeName,
-                    PipeDirection.In,
-                    1,
-                    PipeTransmissionMode.Message
-                );
+                NotifyFilter = NotifyFilters.LastWrite,
+                EnableRaisingEvents = true
+            };
 
-                _pipeServer.WaitForConnection();
+            _autoCADWatcher.Changed += (s, e) => OnAutoCADDataFileChanged(e.FullPath);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to start AutoCAD watcher: {ex.Message}");
+        }
+    }
 
-                using (var reader = new StreamReader(_pipeServer, Encoding.UTF8))
+    private void OnAutoCADDataFileChanged(string filePath)
+    {
+        try
+        {
+            // Small delay to ensure file is fully written
+            Thread.Sleep(100);
+
+            if (File.Exists(filePath))
+            {
+                var jsonData = File.ReadAllText(filePath, Encoding.UTF8);
+                if (!string.IsNullOrEmpty(jsonData))
                 {
-                    string? jsonData = reader.ReadLine();
-
-                    if (!string.IsNullOrEmpty(jsonData))
+                    if (IsHandleCreated)
                     {
                         Invoke(() => ProcessAutoCADData(jsonData));
                     }
                 }
-
-                _pipeServer.Disconnect();
-                _pipeServer.Dispose();
             }
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected when app closes
         }
         catch (Exception ex)
         {
-            Invoke(() =>
-                MessageBox.Show($"AutoCAD Bridge Error:\n{ex.Message}", "Error",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning)
-            );
+            Debug.WriteLine($"Error reading AutoCAD data file: {ex.Message}");
         }
     }
 
@@ -222,9 +229,13 @@ public partial class Form1 : Form
         // Add curves
         foreach (var curve in data.Curves)
         {
+            // Determine if ARC or CIRCLE based on angle difference
+            var curveType = !string.IsNullOrEmpty(curve.EntityType) ? curve.EntityType :
+                           (Math.Abs(curve.EndAngle - curve.StartAngle) > 0.0001 ? "ARC" : "CIRCLE");
+
             _allRows.Add(new EntityRow
             {
-                EntityType = curve.Properties.ContainsKey("radius") ? "ARC" : "CIRCLE",
+                EntityType = curveType,
                 Layer = curve.Layer,
                 Label = $"{curve.Name} (R:{curve.Radius:F2})",
                 SourceLayout = "AutoCAD",
@@ -934,7 +945,7 @@ public partial class Form1 : Form
 
         try
         {
-            var path = baseFileName.EndsWith(".json")
+            var path = baseFileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
                 ? baseFileName
                 : baseFileName + ".json";
 
@@ -1130,9 +1141,28 @@ public partial class Form1 : Form
         File.WriteAllText(path, sb.ToString(), new UTF8Encoding(false));
     }
 
-    private static string JsonEscape(string s) =>
-        s.Replace("\\", "\\\\").Replace("\"", "\\\"")
-         .Replace("\n", "\\n").Replace("\r", "\\r");
+    private static string JsonEscape(string s)
+    {
+        var sb = new StringBuilder();
+        foreach (var c in s)
+        {
+            switch (c)
+            {
+                case '\\': sb.Append("\\\\"); break;
+                case '"':  sb.Append("\\\""); break;
+                case '\n': sb.Append("\\n");  break;
+                case '\r': sb.Append("\\r");  break;
+                case '\t': sb.Append("\\t");  break;
+                case '\b': sb.Append("\\b");  break;
+                case '\f': sb.Append("\\f");  break;
+                default:
+                    if (c < 32) sb.AppendFormat("\\u{0:X4}", (int)c);
+                    else sb.Append(c);
+                    break;
+            }
+        }
+        return sb.ToString();
+    }
 
     // ─── CSV escaping ─────────────────────────────────────────
     private static string NotesColumn(string layoutName, string? extraSuffix)
@@ -1217,6 +1247,11 @@ public sealed class EntityRow : INotifyPropertyChanged
     public string Label        { get; set; } = "";
     public string CoordSummary { get; set; } = "";
     public List<string> CsvRows { get; set; } = new();
+
+    // AutoCAD Bridge: coordinates for display from AutoCAD data
+    public string X { get; set; } = "";
+    public string Y { get; set; } = "";
+    public string Z { get; set; } = "";
 
     // FIX Bug 2: raw insert position — used directly by topology engine (no CoordSummary parsing)
     public double RawE { get; set; }
