@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 
 namespace DxfCoordinateExtractor;
 
@@ -42,9 +43,13 @@ public class LineData
     public string Name { get; set; } = "";
 
     // Explicit coordinates (not relying on point references)
+    [JsonProperty("startE")]
     public double StartE { get; set; }
+    [JsonProperty("startN")]
     public double StartN { get; set; }
+    [JsonProperty("endE")]
     public double EndE { get; set; }
+    [JsonProperty("endN")]
     public double EndN { get; set; }
 
     public double Length { get; set; }
@@ -69,12 +74,17 @@ public class CurveData
 {
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
+    [JsonProperty("entityType")]
     public string EntityType { get; set; } = "ARC"; // "ARC" or "CIRCLE"
 
+    [JsonProperty("centerE")]
     public double CenterE { get; set; }
+    [JsonProperty("centerN")]
     public double CenterN { get; set; }
     public double Radius { get; set; }
+    [JsonProperty("startAngle")]
     public double StartAngle { get; set; }
+    [JsonProperty("endAngle")]
     public double EndAngle { get; set; }
 
     public string Layer { get; set; } = "";
