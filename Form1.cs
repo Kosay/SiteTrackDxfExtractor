@@ -202,7 +202,9 @@ public partial class Form1 : Form
 
     private void DisplayAutoCADData(AutoCADExportData data)
     {
-        // Clear current grid
+        // NOTE: Each new data load completely replaces the old data.
+        // Running getData twice will replace the previous extraction, not merge.
+        // This ensures you always see current data from the latest AutoCAD selection.
         _allRows.Clear();
 
         // Add points
@@ -382,6 +384,54 @@ public partial class Form1 : Form
         {
             MessageBox.Show($"Error loading DXF:\n{ex.Message}",
                 "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            lblStatus.Text = "Load failed.";
+        }
+    }
+
+    private void btnBrowseJSON_Click(object sender, EventArgs e)
+    {
+        using var dlg = new OpenFileDialog
+        {
+            Title = "Select AutoCAD JSON Data File",
+            Filter = "JSON Files (*.json)|*.json|All Files (*.*)|*.*"
+        };
+        if (dlg.ShowDialog() != DialogResult.OK) return;
+        LoadAutoCADJSON(dlg.FileName);
+    }
+
+    private void LoadAutoCADJSON(string path)
+    {
+        try
+        {
+            lblStatus.Text = "Loading JSON...";
+            Application.DoEvents();
+
+            if (!File.Exists(path))
+            {
+                MessageBox.Show($"File not found: {path}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                lblStatus.Text = "File not found.";
+                return;
+            }
+
+            var jsonData = File.ReadAllText(path, Encoding.UTF8);
+            if (string.IsNullOrEmpty(jsonData))
+            {
+                MessageBox.Show("JSON file is empty.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                lblStatus.Text = "JSON file is empty.";
+                return;
+            }
+
+            ProcessAutoCADData(jsonData);
+            lblStatus.Text = $"✓ Loaded JSON from {Path.GetFileName(path)}";
+        }
+        catch (JsonException ex)
+        {
+            MessageBox.Show($"JSON Parse Error:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            lblStatus.Text = "JSON parse error.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error loading JSON:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             lblStatus.Text = "Load failed.";
         }
     }
