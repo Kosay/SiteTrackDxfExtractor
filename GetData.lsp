@@ -337,18 +337,17 @@
 )
 
 ;;; Convert value to JSON
-(defun value-to-json (val)
+(defun value-to-json (val / num-result)
   (cond
     ((= val T) "true")
     ((null val) "null")
     (T
-     (let ((num-result (vl-catch-all-apply 'rtos (list val 2))))
-       (if (vl-catch-all-error-p num-result)
-         ;; rtos failed - val is not a number, treat as string
-         (strcat "\"" (json-escape (vl-symbol-name val)) "\"")
-         ;; rtos succeeded - val is a number, return unquoted
-         num-result
-       )
+     (setq num-result (vl-catch-all-apply 'rtos (list val 2)))
+     (if (vl-catch-all-error-p num-result)
+       ;; rtos failed - val is not a number, treat as string
+       (strcat "\"" (json-escape (strcat "" val)) "\"")
+       ;; rtos succeeded - val is a number, return unquoted
+       num-result
      )
     )
   )
