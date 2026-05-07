@@ -84,8 +84,8 @@ C:\Program Files\Autodesk\AutoCAD 2024\Support
 
 ```
 1. Run DxfCoordinateExtractor.exe
-2. App starts listening on named pipe: "SiteTrackDxfBridgePipe"
-3. Status bar shows: "Listening for AutoCAD data..."
+2. App watches for data in: %USERPROFILE%\Documents\sitetrack_data.json
+3. Status bar shows the current state
 4. Keep app running while using AutoCAD
 ```
 
@@ -143,10 +143,12 @@ AutoCAD prints:
   ✓ Points: 5
   ✓ Lines: 8
   ✓ Curves: 2
+  ✓ Texts: 0
   ✓ Total: 15
   ✓ Data sent to SiteTrack Bridge App!
+  >> Data also saved to: %USERPROFILE%\Documents\sitetrack_data.json
 
-Helper App displays:
+Helper App detects the file and displays:
   ✓ Received from AutoCAD: 5 points, 8 lines, 2 curves, 0 texts
 ```
 
