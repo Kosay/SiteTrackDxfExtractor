@@ -239,10 +239,7 @@
 
 ;;; Remove MTEXT formatting codes (simplified)
 (defun remove-mtext-formatting (str)
-  (if (stringp str)
-    str
-    ""
-  )
+  str
 )
 
 ;;; Extract MTEXT
