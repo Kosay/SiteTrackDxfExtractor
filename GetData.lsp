@@ -237,6 +237,13 @@
   )
 )
 
+;;; Remove MTEXT formatting codes (simplified)
+(defun remove-mtext-formatting (str)
+  ;; Just return the string as-is - MTEXT formatting varies widely
+  ;; and proper parsing requires complex logic. Keep raw text for now.
+  str
+)
+
 ;;; Extract MTEXT
 (defun extract-mtext (ent obj / content pt layer)
   (setq content (cdr (assoc 1 obj)))
@@ -253,13 +260,6 @@
     (list "N" (nth 1 pt))
     (list "layer" layer)
   )
-)
-
-;;; Remove MTEXT formatting codes (simplified)
-(defun remove-mtext-formatting (str)
-  ;; Just return the string as-is - MTEXT formatting varies widely
-  ;; and proper parsing requires complex logic. Keep raw text for now.
-  str
 )
 
 ;;; Send data to WinForms app via file-based handshake
