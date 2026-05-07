@@ -330,9 +330,11 @@
 
 ;;; Escape special characters for JSON strings
 (defun json-escape (s)
-  ;; Simple escaping: just handle quotes and basic chars
-  (setq s (vl-string-subst "\\\"" "\"" s))
-  (setq s (vl-string-subst "\\" "\\\\" s))
+  ;; IMPORTANT: Escape backslash FIRST, then other characters
+  ;; Otherwise double-escaping creates invalid JSON sequences
+  (setq s (vl-string-subst "\\\\" "\\" s))  ; \ → \\
+  (setq s (vl-string-subst "\\\"" "\"" s))  ; " → \"
+  (setq s (vl-string-subst "\\/" "/" s))    ; / → \/ (optional but safe)
   s
 )
 
