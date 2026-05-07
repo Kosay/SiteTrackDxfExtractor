@@ -87,6 +87,13 @@
         )
       )
 
+      ;; MTEXT entity
+      ((= type "MTEXT")
+        (setq text-data (extract-mtext ent obj))
+        (if text-data
+          (setq texts (cons text-data texts))
+        )
+      )
     )
 
     (setq idx (+ idx 1))
@@ -230,6 +237,31 @@
   )
 )
 
+;;; Remove MTEXT formatting codes (simplified)
+(defun remove-mtext-formatting (str)
+  (if (stringp str)
+    str
+    ""
+  )
+)
+
+;;; Extract MTEXT
+(defun extract-mtext (ent obj / content pt layer)
+  (setq content (cdr (assoc 1 obj)))
+  (setq pt (cdr (assoc 10 obj)))
+  (setq layer (cdr (assoc 8 obj)))
+
+  ;; Clean up MTEXT formatting codes
+  (setq content (remove-mtext-formatting content))
+
+  (list
+    (list "type" "MTEXT")
+    (list "content" content)
+    (list "E" (nth 0 pt))
+    (list "N" (nth 1 pt))
+    (list "layer" layer)
+  )
+)
 
 ;;; Send data to WinForms app via file-based handshake
 (defun send-to-pipe (points lines curves texts / json-str)
