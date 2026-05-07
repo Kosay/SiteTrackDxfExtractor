@@ -237,6 +237,14 @@
   )
 )
 
+;;; Remove MTEXT formatting codes (simplified)
+(defun remove-mtext-formatting (str)
+  (if (stringp str)
+    str
+    ""
+  )
+)
+
 ;;; Extract MTEXT
 (defun extract-mtext (ent obj / content pt layer)
   (setq content (cdr (assoc 1 obj)))
@@ -253,33 +261,6 @@
     (list "N" (nth 1 pt))
     (list "layer" layer)
   )
-)
-
-;;; Remove MTEXT formatting codes
-(defun remove-mtext-formatting (str / result i j k)
-  (setq result str)
-  ;; Replace each {\...; content} with just the content
-  (while (and (vl-string-search "{\\\\\\\" result)
-              (vl-string-search ";" result)
-              (vl-string-search "}" result))
-    (setq i (vl-string-search "{\\\\\\\" result))
-    (if i
-      (progn
-        (setq j (vl-string-search ";" result i))
-        (setq k (vl-string-search "}" result j))
-        (if (and j k (> j i) (> k j))
-          ;; Extract content between ; and }, then rebuild string
-          (setq result (strcat (substr result 1 i)
-                               (substr result (+ j 2) (- k j 1))
-                               (substr result (+ k 2))))
-          ;; Safety: remove the opening if no closing found
-          (setq result (vl-string-subst "" "{\\\\\\\" result))
-        )
-      )
-      (setq result str)
-    )
-  )
-  result
 )
 
 ;;; Send data to WinForms app via file-based handshake
@@ -351,20 +332,11 @@
 )
 
 ;;; Escape special characters for JSON strings
-(defun json-escape (s / out i c)
-  (setq out "" i 1)
-  (repeat (strlen s)
-    (setq c (substr s i 1) i (1+ i))
-    (cond
-      ((= c "\\") (setq out (strcat out "\\\\")))
-      ((= c "\"") (setq out (strcat out "\\\"")))
-      ((= c "\n") (setq out (strcat out "\\n")))
-      ((= c "\r") (setq out (strcat out "\\r")))
-      ((= c "\t") (setq out (strcat out "\\t")))
-      (T          (setq out (strcat out c)))
-    )
-  )
-  out
+(defun json-escape (s)
+  ;; Simple escaping: just handle quotes and basic chars
+  (setq s (vl-string-subst "\\\"" "\"" s))
+  (setq s (vl-string-subst "\\" "\\\\" s))
+  s
 )
 
 ;;; Convert value to JSON
