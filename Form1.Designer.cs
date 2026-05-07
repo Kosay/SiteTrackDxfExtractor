@@ -8,6 +8,7 @@ partial class Form1
     // Top panel controls
     private Panel pnlTop = null!;
     private Button btnOpen = null!;
+    private Button btnBrowseJSON = null!;
     private Label lblFile = null!;
     private Label label1 = null!;
     private ComboBox cmbLayer = null!;
@@ -97,7 +98,7 @@ partial class Form1
         pnlTop.Padding   = new Padding(12, 10, 12, 10);
         pnlTop.Controls.AddRange(new Control[]
         {
-            btnOpen, lblFile, label1, cmbLayer, label2, cmbType, btnSelectAll, btnSelectNone
+            btnOpen, btnBrowseJSON, lblFile, label1, cmbLayer, label2, cmbType, btnSelectAll, btnSelectNone
         });
 
         btnOpen.Text                         = "Open DXF File";
@@ -111,9 +112,20 @@ partial class Form1
         btnOpen.Cursor                       = Cursors.Hand;
         btnOpen.Click                       += btnOpen_Click;
 
+        btnBrowseJSON.Text                   = "Browse JSON";
+        btnBrowseJSON.Location               = new Point(172, 12);
+        btnBrowseJSON.Size                   = new Size(120, 36);
+        btnBrowseJSON.FlatStyle              = FlatStyle.Flat;
+        btnBrowseJSON.FlatAppearance.BorderColor = Color.FromArgb(150, 150, 150);
+        btnBrowseJSON.BackColor              = Color.FromArgb(50, 65, 80);
+        btnBrowseJSON.ForeColor              = Color.White;
+        btnBrowseJSON.Font                   = new Font("Segoe UI", 9.5F, FontStyle.Bold);
+        btnBrowseJSON.Cursor                 = Cursors.Hand;
+        btnBrowseJSON.Click                  += btnBrowseJSON_Click;
+
         lblFile.Text      = "No file loaded — drag and drop a DXF here or click Open";
-        lblFile.Location  = new Point(172, 20);
-        lblFile.Size      = new Size(600, 20);
+        lblFile.Location  = new Point(312, 20);
+        lblFile.Size      = new Size(460, 20);
         lblFile.ForeColor = Color.FromArgb(180, 200, 220);
         lblFile.Font      = new Font("Segoe UI", 9F);
 
