@@ -120,14 +120,18 @@ public partial class Form1 : Form
 
             _autoCADWatcher = new FileSystemWatcher(docsPath, "sitetrack_data.json")
             {
-                NotifyFilter = NotifyFilters.LastWrite,
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName,
                 EnableRaisingEvents = true
             };
 
             _autoCADWatcher.Changed += (s, e) => OnAutoCADDataFileChanged(e.FullPath);
+            _autoCADWatcher.Created += (s, e) => OnAutoCADDataFileChanged(e.FullPath);
+
+            lblStatus.Text = "Listening for AutoCAD data...";
         }
         catch (Exception ex)
         {
+            lblStatus.Text = $"Error: Failed to start AutoCAD watcher: {ex.Message}";
             Debug.WriteLine($"Failed to start AutoCAD watcher: {ex.Message}");
         }
     }
@@ -136,18 +140,30 @@ public partial class Form1 : Form
     {
         try
         {
-            // Small delay to ensure file is fully written
-            Thread.Sleep(100);
-
-            if (File.Exists(filePath))
+            // Retry reading file in case it's still being written
+            string? jsonData = null;
+            for (int i = 0; i < 5; i++)
             {
-                var jsonData = File.ReadAllText(filePath, Encoding.UTF8);
-                if (!string.IsNullOrEmpty(jsonData))
+                try
                 {
-                    if (IsHandleCreated)
+                    Thread.Sleep(50 * (i + 1)); // Progressive delay
+                    if (File.Exists(filePath))
                     {
-                        Invoke(() => ProcessAutoCADData(jsonData));
+                        jsonData = File.ReadAllText(filePath, Encoding.UTF8);
+                        break;
                     }
+                }
+                catch (IOException)
+                {
+                    if (i == 4) throw; // Throw on last attempt
+                }
+            }
+
+            if (!string.IsNullOrEmpty(jsonData))
+            {
+                if (IsHandleCreated)
+                {
+                    Invoke(() => ProcessAutoCADData(jsonData));
                 }
             }
         }
