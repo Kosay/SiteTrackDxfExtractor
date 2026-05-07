@@ -239,10 +239,7 @@
 
 ;;; Remove MTEXT formatting codes (simplified)
 (defun remove-mtext-formatting (str)
-  (if (stringp str)
-    str
-    ""
-  )
+  str
 )
 
 ;;; Extract MTEXT
@@ -342,22 +339,20 @@
 ;;; Convert value to JSON
 (defun value-to-json (val / num-str)
   (cond
-    ((stringp val)
-      (strcat "\"" (json-escape val) "\"")
-    )
-    ((numberp val)
-      ;; Format number with 6 decimals, ensure '.' not ','
-      (setq num-str (rtos val 2 6))
-      (vl-string-subst "." "," num-str)
-    )
     ((= val T)
       "true"
     )
     ((= val nil)
       "null"
     )
+    ((numberp val)
+      ;; Format number with 6 decimals, ensure '.' not ','
+      (setq num-str (rtos val 2 6))
+      (vl-string-subst "." "," num-str)
+    )
     (T
-      "\"unknown\""
+      ;; Treat as string
+      (strcat "\"" (json-escape (rtos val 2)) "\"")
     )
   )
 )
