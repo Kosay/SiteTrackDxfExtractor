@@ -239,9 +239,10 @@
 
 ;;; Remove MTEXT formatting codes (simplified)
 (defun remove-mtext-formatting (str)
-  ;; Just return the string as-is - MTEXT formatting varies widely
-  ;; and proper parsing requires complex logic. Keep raw text for now.
-  str
+  (if (stringp str)
+    str
+    ""
+  )
 )
 
 ;;; Extract MTEXT
@@ -331,20 +332,11 @@
 )
 
 ;;; Escape special characters for JSON strings
-(defun json-escape (s / out i c)
-  (setq out "" i 1)
-  (repeat (strlen s)
-    (setq c (substr s i 1) i (1+ i))
-    (cond
-      ((= c "\\") (setq out (strcat out "\\\\")))
-      ((= c "\"") (setq out (strcat out "\\\"")))
-      ((= c "\n") (setq out (strcat out "\\n")))
-      ((= c "\r") (setq out (strcat out "\\r")))
-      ((= c "\t") (setq out (strcat out "\\t")))
-      (T          (setq out (strcat out c)))
-    )
-  )
-  out
+(defun json-escape (s)
+  ;; Simple escaping: just handle quotes and basic chars
+  (setq s (vl-string-subst "\\\"" "\"" s))
+  (setq s (vl-string-subst "\\" "\\\\" s))
+  s
 )
 
 ;;; Convert value to JSON
