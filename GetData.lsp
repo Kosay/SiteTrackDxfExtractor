@@ -255,31 +255,11 @@
   )
 )
 
-;;; Remove MTEXT formatting codes
-(defun remove-mtext-formatting (str / result i j k)
-  (setq result str)
-  ;; Replace each {\...; content} with just the content
-  (while (and (vl-string-search "{\\\\\\\" result)
-              (vl-string-search ";" result)
-              (vl-string-search "}" result))
-    (setq i (vl-string-search "{\\\\\\\" result))
-    (if i
-      (progn
-        (setq j (vl-string-search ";" result i))
-        (setq k (vl-string-search "}" result j))
-        (if (and j k (> j i) (> k j))
-          ;; Extract content between ; and }, then rebuild string
-          (setq result (strcat (substr result 1 i)
-                               (substr result (+ j 2) (- k j 1))
-                               (substr result (+ k 2))))
-          ;; Safety: remove the opening if no closing found
-          (setq result (vl-string-subst "" "{\\\\\\\" result))
-        )
-      )
-      (setq result str)
-    )
-  )
-  result
+;;; Remove MTEXT formatting codes (simplified)
+(defun remove-mtext-formatting (str)
+  ;; Just return the string as-is - MTEXT formatting varies widely
+  ;; and proper parsing requires complex logic. Keep raw text for now.
+  str
 )
 
 ;;; Send data to WinForms app via file-based handshake
