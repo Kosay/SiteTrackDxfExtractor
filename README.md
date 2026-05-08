@@ -1,23 +1,72 @@
 # SiteTrack DXF Extractor
 
-A C# WinForms desktop tool that parses AutoCAD DXF files and exports infrastructure network data in formats ready for direct import into **SiteTrack**.
+A **two-part tool** that bridges AutoCAD and SiteTrack for seamless infrastructure data extraction:
+
+1. **GetData.lsp** — AutoCAD LISP script that extracts selected objects (points, lines, curves, text) and writes JSON
+2. **DxfCoordinateExtractor** — Windows Forms app that reviews and exports the JSON in SiteTrack-ready formats
+
+---
+
+## Quick Start
+
+**New to this tool?** Start here:
+- 📖 [Quick Start Guide (5 min read)](QUICKSTART.md) — Get up and running in minutes
+- 📚 [Complete Integration Guide](INTEGRATION_GUIDE.md) — Detailed workflow, setup, troubleshooting, and data mapping
 
 ---
 
 ## What It Does
 
-Engineers receive survey drawings in DXF format (AutoCAD). These drawings contain manholes, pipes, and annotation labels scattered across many layers. This tool reads those drawings and produces structured CSV and JSON files that SiteTrack's network importer accepts — no manual data entry required.
+AutoCAD drawings contain infrastructure data (manholes, pipes, annotations) scattered across many layers. This tool extracts that data directly from AutoCAD and produces JSON files that SiteTrack can import — no manual data entry required.
 
 ### Workflow
 
 ```
-DXF File  →  Open in app  →  Assign layer roles  →  Export for SiteTrack  →  Import into SiteTrack
+Your DXF in AutoCAD
+        ↓
+  Load GetData.lsp
+        ↓
+  Select objects → Run 'getData' command
+        ↓
+  JSON file created (sitetrack_data.json)
+        ↓
+  Windows app detects & displays data
+        ↓
+  Review in grid, then export
+        ↓
+  Import into SiteTrack
 ```
 
-1. **Open** a DXF file (button or drag-and-drop)
-2. **Review** all entities in the grid — filter by layer or type
-3. **Assign roles** to each layer in the right panel (Node / Pipe / Label)
-4. **Export for SiteTrack** — the app derives the network topology and writes three files
+**Three simple phases:**
+1. **Extract** — Run `getData` in AutoCAD to extract selected objects
+2. **Review** — Windows app displays extracted data in grid format
+3. **Export** — Click "Export" to create SiteTrack-ready JSON file
+
+---
+
+## How It Works
+
+### Part 1: GetData.lsp (AutoCAD Script)
+
+Run in AutoCAD to extract selected objects:
+
+```
+(load "C:\\path\\to\\GetData.lsp")
+getData
+```
+
+✓ Supports: Points, Lines, Polylines, Arcs, Circles, Text, MText  
+✓ Outputs: JSON file to `%USERPROFILE%\Documents\sitetrack_data.json`  
+✓ Compatible: AutoCAD 2007+
+
+### Part 2: DxfCoordinateExtractor (Windows App)
+
+Review and export the extracted data:
+
+✓ Auto-detects JSON file created by GetData.lsp  
+✓ Displays extracted objects in grid view  
+✓ Filter by type (points, lines, curves, text)  
+✓ Export as JSON for SiteTrack import
 
 ---
 
@@ -163,16 +212,85 @@ Depends on [netDxf](https://github.com/haplokuon/netDxf) (pulled automatically v
 
 ---
 
-## How to Use — Step by Step
+## Getting Started
 
-1. Run `DxfCoordinateExtractor.exe`
-2. Click **Open DXF File** or drag a `.dxf` file onto the window
-3. All entities appear in the main grid. Use the **Layer** and **Type** dropdowns to explore
-4. In the **Layer Roles** panel (right side):
-   - Select each manhole/node layer → set role to **Node**
-   - Select each pipe/polyline layer → set role to **Pipe**
-   - Select each annotation/label layer (FLOWARROW blocks) → set role to **Label**
-5. Adjust **Snap tolerance** and **Text search radius** if needed
-6. Click **Export for SiteTrack**
-7. Choose a save location — three files are written automatically
-8. In SiteTrack → Admin → Networks → Import CSV → import `_nodes.csv`
+### For Users
+
+**Fastest path (5 minutes):**
+1. See [QUICKSTART.md](QUICKSTART.md) for essential steps
+
+**Complete workflow with examples:**
+1. See [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md) for detailed setup, troubleshooting, and best practices
+
+### Installation
+
+**GetData.lsp:**
+```
+Copy to: C:\Users\[YourName]\Documents\AutoCAD\LISP\
+Load in AutoCAD: (load "C:\\path\\to\\GetData.lsp")
+```
+
+**Windows App:**
+```
+Build: dotnet build
+Run: bin\Release\DxfCoordinateExtractor.exe
+```
+
+### Basic Workflow
+
+1. **In AutoCAD:**
+   - Open your DXF file
+   - Select objects you want to extract
+   - Run `getData` command
+   - Check Documents folder for `sitetrack_data.json`
+
+2. **In Windows App:**
+   - App auto-detects the JSON file
+   - Review extracted data in the grid
+   - Click **Export AutoCAD Data** to save SiteTrack-ready JSON
+   - Verify coordinates and object types
+
+3. **In SiteTrack:**
+   - Create new project
+   - Import the JSON file
+   - Verify points appear as junctions, lines as pipes
+   - Begin analysis and management
+
+---
+
+## Data Supported
+
+| Source | Extracted As |
+|--------|--------------|
+| **POINT** entity | Junction/Node |
+| **LINE** entity | Pipe connection |
+| **LWPOLYLINE / POLYLINE** | Pipe path |
+| **ARC / CIRCLE** | Bend or fitting |
+| **TEXT / MTEXT** | Label or annotation |
+
+Text formatting codes (MTEXT `\P`, `\A`, `\C` sequences) are automatically cleaned.
+
+---
+
+## Output Format
+
+### JSON for SiteTrack
+
+```json
+{
+  "schemaVersion": 1,
+  "exportedAt": "2026-05-08T14:30:00Z",
+  "source": "AutoCAD",
+  "coordinateSystemHint": "UTM",
+  "points": [
+    { "type": "POINT", "E": 335684.045, "N": 2678151.885, "layer": "MANHOLE_POINTS" }
+  ],
+  "lines": [
+    { "type": "LINE", "startE": 335684, "startN": 2678151, "endE": 335750, "endN": 2678200, "layer": "PIPE_MAIN" }
+  ],
+  "curves": [ ... ],
+  "texts": [ ... ]
+}
+```
+
+All coordinates and structure are optimized for direct SiteTrack import.
