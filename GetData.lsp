@@ -237,8 +237,26 @@
   )
 )
 
-;;; Remove MTEXT formatting codes (simplified)
+;;; Remove MTEXT formatting codes (properly)
 (defun remove-mtext-formatting (str)
+  ;; Handle paragraph breaks: \P -> space
+  (setq str (vl-string-subst " " "\\P" str))
+
+  ;; Handle alignment codes: \A0, \A1, \A2, etc -> remove
+  (setq str (vl-string-subst "" "\\A0" str))
+  (setq str (vl-string-subst "" "\\A1" str))
+  (setq str (vl-string-subst "" "\\A2" str))
+
+  ;; Handle color codes: \C1, \C2, etc -> remove
+  (setq str (vl-string-subst "" "\\C1" str))
+  (setq str (vl-string-subst "" "\\C2" str))
+  (setq str (vl-string-subst "" "\\C3" str))
+
+  ;; Handle font codes: \F... -> remove (more complex, skip for now)
+
+  ;; Handle Unicode sequences: \U+xxxx -> remove
+  ;; This is harder, so just handle the most common pattern
+
   str
 )
 
@@ -330,9 +348,11 @@
 
 ;;; Escape special characters for JSON strings
 (defun json-escape (s)
-  ;; Simple escaping: just handle quotes and basic chars
-  (setq s (vl-string-subst "\\\"" "\"" s))
-  (setq s (vl-string-subst "\\" "\\\\" s))
+  ;; IMPORTANT: Escape backslash FIRST, then other characters
+  ;; Otherwise double-escaping creates invalid JSON sequences
+  (setq s (vl-string-subst "\\\\" "\\" s))  ; \ → \\
+  (setq s (vl-string-subst "\\\"" "\"" s))  ; " → \"
+  (setq s (vl-string-subst "\\/" "/" s))    ; / → \/ (optional but safe)
   s
 )
 

@@ -53,6 +53,7 @@ partial class Form1
         // ── Instantiate ──────────────────────────────────────
         pnlTop             = new Panel();
         btnOpen            = new Button();
+        btnBrowseJSON      = new Button();
         lblFile            = new Label();
         label1             = new Label();
         cmbLayer           = new ComboBox();

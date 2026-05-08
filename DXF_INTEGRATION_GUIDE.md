@@ -1,297 +1,233 @@
+﻿
 # DXF to SiteTrack Integration Guide
 
-A complete guide for exporting AutoCAD DXF files as JSON compatible with SiteTrack's network import system.
+This document specifies the exact JSON schema and requirements for integrating DXF files into SiteTrack via the **SiteTrackDxfExtractor** tool.
+
+## Overview
+
+SiteTrack imports infrastructure networks (roads, sewers, water lines, etc.) from DXF files by converting them to a standardized **connection.json** format. The DXF extraction tool must output JSON files that conform to this exact schema.
 
 ---
 
-## JSON Schema Specification
+## Required JSON Schema (connection.json)
 
-The JSON export must follow this structure for SiteTrack compatibility:
+### Complete Structure
 
 ```json
 {
   "schemaVersion": 1,
-  "exportedAt": "2026-05-03T10:30:00Z",
-  "sourceFileName": "network.dxf",
+  "exportedAt": "2025-05-03T14:30:45.123Z",
+  "sourceFileName": "Infrastructure_Network_v2.dxf",
   "coordinateSystemHint": "UTM",
   "points": [
     {
-      "id": "pt-1",
+      "id": "pt-001",
       "name": "Junction A",
       "E": 234567.89,
       "N": 4567890.12,
-      "layer": "MANHOLE_ACCESS",
-      "properties": {}
+      "layer": "NETWORK_JUNCTIONS",
+      "properties": {
+        "elevation": 125.5,
+        "material": "concrete",
+        "diameter": "300mm"
+      }
     }
   ],
   "connections": [
     {
-      "id": "conn-1",
-      "fromPointId": "pt-1",
-      "toPointId": "pt-2",
+      "id": "conn-001",
+      "fromPointId": "pt-001",
+      "toPointId": "pt-002",
       "length": 145.67,
       "properties": {
-        "slope": 0.5,
-        "diameter": 500
+        "pipe_type": "gravity_sewer",
+        "material": "PVC",
+        "slope": 0.005
       }
     }
   ]
 }
 ```
 
----
+### Field Specifications
 
-## Field Reference Tables
+#### Root Object
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `schemaVersion` | number | **Yes** | Must be exactly `1`. No other versions accepted. |
+| `exportedAt` | string | **Yes** | ISO 8601 timestamp (e.g., `2025-05-03T14:30:45.123Z`). Use `new Date().toISOString()` in JavaScript or equivalent. |
+| `sourceFileName` | string | **Yes** | Original DXF filename (e.g., `"Infrastructure_Network.dxf"`). Used for tracking and UI display. |
+| `coordinateSystemHint` | string | **Yes** | Must be one of: `"UTM"`, `"WGS84"`, or `"Local"`. Describes the coordinate system of E/N values. |
+| `points` | array | **Yes** | Array of connection points (junctions, endpoints, etc.). Must have at least 1 point. |
+| `connections` | array | **Yes** | Array of connections between points. Can be empty if only creating points. |
 
-### Root Level Fields
+#### Points Array
+Each point object must contain:
 
 | Field | Type | Required | Description |
-|---|---|---|---|
-| `schemaVersion` | Integer | Yes | Always `1`. Used by SiteTrack to detect format version. |
-| `exportedAt` | ISO-8601 String | Yes | Timestamp when export was generated (UTC, e.g., `"2026-05-03T10:30:00Z"`). |
-| `sourceFileName` | String | Yes | Original DXF filename (e.g., `"network.dxf"`). Helps track source in SiteTrack. |
-| `coordinateSystemHint` | String | Yes | One of: `"UTM"`, `"WGS84"`, `"Local"`. Guides SiteTrack's coordinate handling. |
-| `points` | Array | Yes | Network junctions/nodes. Must contain at least one point. |
-| `connections` | Array | Yes | Links between points. May be empty if no pipes/edges. |
+|-------|------|----------|-------------|
+| `id` | string | **Yes** | Unique identifier within this file (e.g., `"pt-001"`, `"J-101"`, `"NODE-A"`). Used to reference in connections. |
+| `name` | string | **Yes** | Human-readable name (e.g., `"Junction A"`, `"Main Line Start"`, `"Manhole 5"`). Displayed in UI. |
+| `E` | number | **Yes** | Easting coordinate. Numeric value (integer or float). **Must be a number, not string.** |
+| `N` | number | **Yes** | Northing coordinate. Numeric value (integer or float). **Must be a number, not string.** |
+| `layer` | string | No | DXF layer name. Helps identify point type. E.g., `"NETWORK_JUNCTIONS"`, `"MANHOLE_ACCESS"`, `"WATER_INTAKE"`. |
+| `properties` | object | No | Additional metadata as key-value pairs. Can include elevation, material, diameter, etc. No validation applied. |
 
-### Points (Network Junctions/Nodes)
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `id` | String | Yes | Unique identifier within the export. Used to reference in connections. Pattern: `pt-1`, `MH-001`, etc. Must be unique. |
-| `name` | String | Yes | Human-readable name. Appears in SiteTrack UI. Examples: `"Junction A"`, `"MH-001"`, `"Pump Station 1"`. |
-| `E` | Number | Yes | Easting coordinate (numeric, not string). For UTM: meters. For WGS84: decimal degrees. Precision: 2-6 decimals. |
-| `N` | Number | Yes | Northing coordinate (numeric, not string). For UTM: meters. For WGS84: decimal degrees. Precision: 2-6 decimals. |
-| `layer` | String | No | Original DXF layer name. Optional; helps identify point source in SiteTrack. Examples: `"MANHOLE_ACCESS"`, `"JUNCTION"`, `"NODE_LAYER"`. |
-| `properties` | Object | No | Optional metadata. Key-value pairs (strings, numbers, or booleans). Examples: `{"type": "manhole", "depth": 2.5}`. |
-
-### Connections (Links Between Points)
+#### Connections Array
+Each connection object must contain:
 
 | Field | Type | Required | Description |
-|---|---|---|---|
-| `id` | String | Yes | Unique identifier. Pattern: `conn-1`, `PIPE-001`, etc. |
-| `fromPointId` | String | Yes | References a point's `id`. Must exist in the `points` array. |
-| `toPointId` | String | Yes | References a point's `id`. Must exist in the `points` array. |
-| `length` | Number | No | Link length (numeric). For UTM/Local: meters. For WGS84: kilometers or degrees (application-dependent). If omitted, SiteTrack may calculate from point coordinates. |
-| `properties` | Object | No | Optional metadata. Common fields: `{"slope": 0.5, "diameter": 500, "material": "PVC"}`. All values are optional. |
+|-------|------|----------|-------------|
+| `id` | string | **Yes** | Unique identifier for this connection (e.g., `"conn-001"`, `"PIPE-A1-A2"`, `"LINK-N01-N02"`). |
+| `fromPointId` | string | **Yes** | **Must reference an existing point ID.** Error thrown if point doesn't exist. |
+| `toPointId` | string | **Yes** | **Must reference an existing point ID.** Error thrown if point doesn't exist. |
+| `length` | number | No | Distance between points in the coordinate system units. If omitted, automatically calculated using Euclidean distance: `√((E₂-E₁)² + (N₂-N₁)²)` |
+| `properties` | object | No | Additional metadata (pipe type, material, slope, etc.). No validation applied. |
 
 ---
 
-## Validation Rules
+## Validation Rules & Error Conditions
 
-SiteTrack's import validator enforces these rules. Violations cause rejection:
+SiteTrack strictly validates the JSON schema. The import will **fail** if:
 
-### Critical (Import Fails)
+### Critical Errors (Import Rejected)
+1. **Missing or invalid `schemaVersion`**: Must be `1`. Examples of failures:
+   - Missing entirely
+   - Value is `"1"` (string instead of number)
+   - Value is `2` or any other number
+   
+2. **Missing or invalid `exportedAt`**: Must be valid ISO 8601 string
+   - Invalid format → error: "Missing or invalid 'exportedAt' field"
+   
+3. **Missing or invalid `sourceFileName`**: Must be non-empty string
+   - Empty string or non-string → error: "Missing or invalid 'sourceFileName'"
+   
+4. **Invalid `coordinateSystemHint`**: Must be exactly `"UTM"`, `"WGS84"`, or `"Local"` (case-sensitive)
+   - Example invalid: `"utm"`, `"EPSG:32634"`, `"NAD83"` → error
+   
+5. **Invalid `points` array**: Must be array, not null/undefined/object
+   - Missing or not array → error: "Missing or invalid 'points' array"
+   
+6. **Invalid `connections` array**: Must be array, not null/undefined/object
+   - Missing or not array → error: "Missing or invalid 'connections' array"
 
-| Rule | Error Example | Fix |
-|---|---|---|
-| **schemaVersion must be 1** | `"schemaVersion": 2` | Use `"schemaVersion": 1` |
-| **E and N must be numbers** | `"E": "234567.89"` (string) | Use `"E": 234567.89` (no quotes) |
-| **fromPointId must reference existing point** | `"fromPointId": "pt-999"` (doesn't exist) | Ensure all referenced IDs exist in `points` array |
-| **toPointId must reference existing point** | `"toPointId": "pt-999"` | Ensure all referenced IDs exist in `points` array |
-| **Circular references not allowed** | `pt-1 → pt-2 → pt-1` | Use acyclic graph or allow in app logic |
-| **No duplicate point IDs** | Two points with `"id": "pt-1"` | Make each point ID unique |
-| **No duplicate connection IDs** | Two connections with `"id": "conn-1"` | Make each connection ID unique |
-| **points array cannot be empty** | `"points": []` | Add at least one point |
+### Point Validation Errors
+For each point in the points array:
+- **Missing `id` or `name`**: Error message: `"Point N: Missing required fields. Each point must have 'id' and 'name'"`
+- **Non-numeric E or N**: Error message: `"Point N (id): Invalid coordinates. Expected numeric E and N, got: E=abc, N=xyz"`
+  - E and N must be numeric (not strings like `"123.45"`)
 
-### Warnings (Import Proceeds; May Flag Issues)
-
-| Rule | Example | Recommendation |
-|---|---|---|
-| **Orphaned points** | Point with no connections | Add connections or mark as isolated junction |
-| **Missing coordinates** | `"E": null` | Provide valid numeric coordinates |
-| **Unknown coordinateSystemHint** | `"coordinateSystemHint": "EPSG:4326"` | Use one of: `"UTM"`, `"WGS84"`, `"Local"` |
-| **length = 0 or negative** | `"length": -10.5` | Use positive values or omit |
-
----
-
-## Coordinate Systems
-
-### UTM (Recommended for Infrastructure Networks)
-
-- **Format**: Numeric meters
-- **Example**: `E: 234567.89, N: 4567890.12`
-- **Precision**: Typically 0-6 decimals (varies by zone size)
-- **Use**: Regional surveys, large infrastructure networks
-- **SiteTrack Hint**: `"coordinateSystemHint": "UTM"`
-
-### WGS84 (GPS-Based)
-
-- **Format**: Decimal degrees (latitude, longitude)
-- **Example**: `E: 35.0123456, N: 31.9876543`
-- **Precision**: 5-8 decimals recommended (1-11 cm accuracy)
-- **Mapping**: Longitude → E, Latitude → N
-- **Use**: Mobile-collected data, international projects
-- **SiteTrack Hint**: `"coordinateSystemHint": "WGS84"`
-
-### Local (Project-Specific)
-
-- **Format**: Numeric, arbitrary origin
-- **Example**: `E: 1000.5, N: 2500.3`
-- **Precision**: Application-dependent
-- **Use**: Internal CAD grids, site-specific surveys
-- **SiteTrack Hint**: `"coordinateSystemHint": "Local"`
-
-**Important**: SiteTrack uses the `coordinateSystemHint` to interpret coordinates. Ensure accuracy; mismatches cause location errors in the network map.
+### Connection Validation Errors
+For each connection in the connections array:
+- **Missing `id`**: Error message: `"Connection N: Missing required 'id'"`
+- **Invalid `fromPointId`**: Error message: `"Connection conn-X: References unknown fromPointId 'pt-999'"`
+  - Must match an existing point id exactly
+- **Invalid `toPointId`**: Same as fromPointId validation
 
 ---
 
-## Layer Filtering Strategy
+## Coordinate System Guidance
 
-When exporting from DXF, apply intelligent filtering to include only infrastructure network data and exclude annotations, boundaries, and non-network geometry.
+### UTM (Universal Transverse Mercator)
+- **When to use**: Large geographic areas in metric units
+- **E values**: "Easting" (meters from zone meridian), typically 200,000–900,000
+- **N values**: "Northing" (meters from equator), typically 0–10,000,000
+- **Example**: Zone 31N, E=234567.89, N=4567890.12
 
-### Include These Network Layers
+### WGS84 (GPS/Latitude-Longitude)
+- **When to use**: Global coordinates, GPS data
+- **E values**: Longitude, range -180 to +180
+- **N values**: Latitude, range -90 to +90
+- **Example**: E=2.3522 (Paris longitude), N=48.8566 (Paris latitude)
 
-| Pattern | Examples | Network Type |
-|---|---|---|
-| `SEWER*` | SEWER_MAIN, SEWER_SECONDARY, SEWER_LATERAL | Sanitary/stormwater sewer |
-| `STORMWATER*` | STORMWATER_PRIMARY, STORMWATER_COLLECTION | Storm drain system |
-| `WATER*` | WATER_MAIN, WATER_SERVICE, WATER_DISTRIBUTION | Water supply |
-| `GAS*` | GAS_TRANSMISSION, GAS_DISTRIBUTION, GAS_SERVICE | Gas utility |
-| `ELECTRICAL*` | ELECTRICAL_MAIN, ELECTRICAL_SECONDARY, ELECTRICAL_FEEDER | Electrical utility |
-| `ROAD*` | ROAD_SURFACE, ROAD_CENTER, ROAD_NETWORK | Road/street network |
-| `STREET*` | STREET_EDGE, STREET_PAVEMENT, STREET_LANES | Street infrastructure |
-| `PIPELINE*` | PIPELINE_OIL, PIPELINE_WATER, PIPELINE_GAS | Pressure pipelines |
-| `UTILITY*` | UTILITY_LINES, UTILITY_POLES, UTILITY_CORRIDOR | Generic utilities |
-| `JUNCTION*` | JUNCTION_NODE, JUNCTION_POINT | Network nodes/junctions |
-| `MANHOLE*` | MANHOLE_ACCESS, MANHOLE_INSPECTION, MANHOLE_CLEAN | Access points |
+### Local (Project-Local Coordinates)
+- **When to use**: Arbitrary local coordinate system with no geographic reference
+- **E values**: Arbitrary meters/units from local origin
+- **N values**: Arbitrary meters/units from local origin
+- **Example**: E=100.0, N=250.5 (relative to site origin)
 
-### Exclude These Non-Network Layers
+---
 
-| Pattern | Examples | Reason |
-|---|---|---|
-| `ANNOTATION*` | ANNOTATION_TEXT, ANNOTATION_SYMBOL | Not network data |
-| `LABEL*` | LABEL_STREET, LABEL_ZONE | Not network data |
-| `TEXT*` | TEXT_GENERAL, TEXT_DIMENSION | Formatting/annotations |
-| `DIMENSION*` | DIMENSION_LINEAR, DIMENSION_ANGULAR | CAD measurements |
-| `BUILDING*` | BUILDING_OUTLINE, BUILDING_FOOTPRINT | Not infrastructure network |
-| `PROPERTY*` | PROPERTY_BOUNDARY, PROPERTY_PARCEL | Land boundaries |
-| `PARCEL*` | PARCEL_LINE, PARCEL_EDGE | Land divisions |
-| `SURVEY*` | SURVEY_POINT, SURVEY_CONTROL | Reference geometry |
-| `TOPO*` | TOPO_CONTOUR, TOPO_ELEVATION | Terrain, not network |
-| `CONSTRUCTION*` | CONSTRUCTION_NOTES, CONSTRUCTION_ZONE | Project-specific, temporary |
-| `REFERENCE*` | REFERENCE_GRID, REFERENCE_AXIS | CAD axes/grids |
+## Layer Filtering for DXF Files
 
-**Filtering Strategy**:
-1. Load DXF; scan all layer names
-2. Match layer name against "Include" patterns (case-insensitive wildcard match)
-3. If match → include layer; if no match → exclude
-4. User can override (e.g., include a custom layer like `CLIENT_SEWERS`)
+CAD files often contain multiple layers representing different infrastructure elements. When extracting roads and networks, **filter out non-network layers**.
+
+### Recommended Network Layers (Include)
+- `SEWER*` (SEWER_LINES, SEWER_GRAVITY, SEWER_FORCE_MAIN)
+- `STORMWATER*` (STORMWATER_LINES, STORM_DRAINAGE)
+- `WATER*` (WATER_MAINS, WATER_SERVICE)
+- `GAS*` (GAS_LINES, GAS_MAIN)
+- `ELECTRICAL*` (POWER_LINES, ELECTRICAL_CONDUIT)
+- `ROAD*` (ROAD_CENTERLINE, ROAD_NETWORK)
+- `STREET*` (STREET_NETWORK, STREET_LINES)
+- `PIPELINE*` (PIPELINE, OIL_LINE)
+- `UTILITY*` (UTILITY_LINE, UTILITY_NETWORK)
+- `NETWORK*` (NETWORK_LINE, INFRASTRUCTURE)
+- `JUNCTION*` (JUNCTIONS, NODES, CONNECTION_POINTS)
+- `MANHOLE*` (MANHOLE_ACCESS, MANHOLE_LOCATION)
+
+### Layers to Exclude (Ignore)
+- `ANNOTATION*`, `LABEL*`, `TEXT*` - Text labels
+- `DIMENSION*`, `HATCH*` - Drawing annotations
+- `CONSTRUCTION*`, `DEFPOINT*` - Construction geometry
+- `XREF*`, `BLOCK*`, `LAYER_FILTERS*` - CAD structure
+- `BUILDING*`, `STRUCTURE*`, `FOUNDATION*` - Building elements
+- `PAVEMENT*`, `ASPHALT*`, `CURB*` - Road surface (not network topology)
+- `PROPERTY*`, `PARCEL*`, `BOUNDARY*` - Legal boundaries
+- `VEGETATION*`, `LANDSCAPE*`, `CONTOUR*` - Natural features
+- `SURVEY*`, `TOPO*` - Survey marks and topography
+- `0` (Default layer) - Usually contains misc. elements
+
+### Filtering Strategy
+1. When parsing DXF, track the layer of each element
+2. Only include entities from whitelisted network layers
+3. For entities without explicit layers, skip them or prompt user
+4. Store the layer name in the `layer` field of each point for traceability
 
 ---
 
 ## Data Mapping Examples
 
-### Example 1: Sewer Network with Manholes and Pipes
+### Example 1: Sewer Network from DXF
 
-**DXF Source:**
-- Layer `MANHOLE_ACCESS` (Insert blocks) → Network nodes
-- Layer `SEWER_MAIN` (Polyline2D) → Pipe connections
-- Layer `SEWER_LABEL` (Insert blocks with text like "L=100m S=0.5%") → Metadata
+**DXF Input (conceptual):**
+- POINT entity at (234567.89, 4567890.12) on layer MANHOLE_ACCESS, name "MH-001"
+- POINT entity at (234600.00, 4567950.00) on layer MANHOLE_ACCESS, name "MH-002"
+- LINE entity from first to second point on layer SEWER_LINES
 
-**Expected JSON:**
+**Output JSON:**
 ```json
 {
   "schemaVersion": 1,
-  "exportedAt": "2026-05-03T10:30:00Z",
-  "sourceFileName": "sewer_network.dxf",
+  "exportedAt": "2025-05-03T14:30:45.123Z",
+  "sourceFileName": "Sewer_Network.dxf",
   "coordinateSystemHint": "UTM",
   "points": [
     {
-      "id": "MH-001",
+      "id": "pt-001",
       "name": "MH-001",
-      "E": 335684.045,
-      "N": 2678151.885,
+      "E": 234567.89,
+      "N": 4567890.12,
       "layer": "MANHOLE_ACCESS",
       "properties": {}
     },
     {
-      "id": "MH-002",
+      "id": "pt-002",
       "name": "MH-002",
-      "E": 335750.000,
-      "N": 2678200.000,
-      "layer": "MANHOLE_ACCESS",
-      "properties": {}
-    },
-    {
-      "id": "MH-003",
-      "name": "MH-003",
-      "E": 335800.000,
-      "N": 2678250.000,
+      "E": 234600.00,
+      "N": 4567950.00,
       "layer": "MANHOLE_ACCESS",
       "properties": {}
     }
   ],
   "connections": [
     {
-      "id": "PIPE-001",
-      "fromPointId": "MH-001",
-      "toPointId": "MH-002",
-      "length": 93.97,
+      "id": "conn-001",
+      "fromPointId": "pt-001",
+      "toPointId": "pt-002",
+      "length": 64.23,
       "properties": {
-        "slope": 0.5,
-        "diameter": 500
-      }
-    },
-    {
-      "id": "PIPE-002",
-      "fromPointId": "MH-002",
-      "toPointId": "MH-003",
-      "length": 66.12,
-      "properties": {
-        "slope": 0.3,
-        "diameter": 500
-      }
-    }
-  ]
-}
-```
-
-### Example 2: Water Distribution with Pump Stations
-
-**DXF Source:**
-- Layer `WATER_JUNCTION` (Insert blocks) → Junctions
-- Layer `WATER_PUMP` (Insert blocks) → Pump stations (special nodes)
-- Layer `WATER_MAIN` (Polyline2D) → Water pipes
-
-**Expected JSON:**
-```json
-{
-  "schemaVersion": 1,
-  "exportedAt": "2026-05-03T11:00:00Z",
-  "sourceFileName": "water_system.dxf",
-  "coordinateSystemHint": "UTM",
-  "points": [
-    {
-      "id": "J-001",
-      "name": "Distribution Junction A",
-      "E": 245000.50,
-      "N": 5125000.75,
-      "layer": "WATER_JUNCTION",
-      "properties": {
-        "type": "junction"
-      }
-    },
-    {
-      "id": "PS-001",
-      "name": "Pump Station 1",
-      "E": 245100.00,
-      "N": 5125050.00,
-      "layer": "WATER_PUMP",
-      "properties": {
-        "type": "pump_station",
-        "capacity_l_s": 50.0
-      }
-    }
-  ],
-  "connections": [
-    {
-      "id": "MAIN-001",
-      "fromPointId": "J-001",
-      "toPointId": "PS-001",
-      "length": 141.42,
-      "properties": {
-        "diameter": 200,
+        "type": "sewer_gravity",
         "material": "PVC"
       }
     }
@@ -299,169 +235,201 @@ When exporting from DXF, apply intelligent filtering to include only infrastruct
 }
 ```
 
-### Example 3: GPS-Based Road Network (WGS84)
+### Example 2: Water Network with Properties
 
-**DXF Source:**
-- Layer `ROAD_CENTER` (Polyline2D) → Road segments
-- Collected with GPS (WGS84 coordinates)
-
-**Expected JSON:**
+**Output JSON:**
 ```json
 {
   "schemaVersion": 1,
-  "exportedAt": "2026-05-03T12:00:00Z",
-  "sourceFileName": "road_survey.dxf",
-  "coordinateSystemHint": "WGS84",
+  "exportedAt": "2025-05-03T15:45:00.000Z",
+  "sourceFileName": "Water_Distribution_Network.dxf",
+  "coordinateSystemHint": "UTM",
   "points": [
     {
-      "id": "RJ-001",
-      "name": "Road Junction 1",
-      "E": 35.123456,
-      "N": 31.987654,
-      "layer": "ROAD_CENTER",
-      "properties": {}
+      "id": "pump-station-1",
+      "name": "Main Pump Station",
+      "E": 450000.0,
+      "N": 5500000.0,
+      "layer": "WATER_INTAKE",
+      "properties": {
+        "type": "pump_station",
+        "capacity_gallons_per_minute": 5000,
+        "elevation_feet": 145.5
+      }
     },
     {
-      "id": "RJ-002",
-      "name": "Road Junction 2",
-      "E": 35.124500,
-      "N": 31.988000,
-      "layer": "ROAD_CENTER",
-      "properties": {}
+      "id": "tank-1",
+      "name": "Storage Tank A",
+      "E": 450500.0,
+      "N": 5500100.0,
+      "layer": "WATER_STORAGE",
+      "properties": {
+        "capacity_gallons": 500000,
+        "material": "concrete"
+      }
     }
   ],
   "connections": [
     {
-      "id": "ROAD-001",
-      "fromPointId": "RJ-001",
-      "toPointId": "RJ-002",
+      "id": "main-line-1",
+      "fromPointId": "pump-station-1",
+      "toPointId": "tank-1",
       "properties": {
-        "width": 8.0,
-        "surface": "asphalt"
+        "pipe_diameter_inches": 24,
+        "pipe_material": "cast_iron"
       }
     }
   ]
 }
 ```
 
----
+### Example 3: GPS Coordinates (WGS84)
 
-## Implementation Checklist for DXF Tool Developers
-
-Use this checklist when updating the DXF exporter:
-
-- [ ] **JSON Structure**
-  - [ ] Root object contains `schemaVersion`, `exportedAt`, `sourceFileName`, `coordinateSystemHint`
-  - [ ] `schemaVersion` is always `1` (integer)
-  - [ ] `exportedAt` is ISO-8601 format with timezone (e.g., `"2026-05-03T10:30:00Z"`)
-  - [ ] `points` array is present (may be empty in edge cases, but best if ≥1)
-  - [ ] `connections` array is present (may be empty)
-
-- [ ] **Points (Nodes)**
-  - [ ] Each point has unique `id`
-  - [ ] Each point has human-readable `name`
-  - [ ] `E` and `N` are numbers (not strings), with appropriate precision
-  - [ ] `layer` field is populated (optional but recommended)
-  - [ ] `properties` object exists (can be empty `{}`)
-
-- [ ] **Connections (Links)**
-  - [ ] Each connection has unique `id`
-  - [ ] `fromPointId` references an existing point `id`
-  - [ ] `toPointId` references an existing point `id`
-  - [ ] `length` is numeric or omitted (not string or null)
-  - [ ] `properties` object exists and may contain `slope`, `diameter`, etc. (all optional)
-
-- [ ] **Data Quality**
-  - [ ] No duplicate point IDs
-  - [ ] No duplicate connection IDs
-  - [ ] All point references resolve (no broken links)
-  - [ ] Coordinates match the declared `coordinateSystemHint`
-  - [ ] Layer names are preserved in the `layer` field
-
-- [ ] **User Interface (DXF Tool)**
-  - [ ] User can select layer roles (Node, Pipe, Label)
-  - [ ] User can set coordinate system hint (dropdown: UTM, WGS84, Local)
-  - [ ] User can adjust snap tolerance for topology matching
-  - [ ] User can specify text search radius for label proximity
-  - [ ] Export button generates valid JSON file
-
-- [ ] **Testing**
-  - [ ] Validate JSON syntax (no parsing errors)
-  - [ ] Validate against schema (all required fields present)
-  - [ ] Test with empty layers (graceful handling)
-  - [ ] Test with large DXF files (performance acceptable)
-  - [ ] Test coordinate systems (UTM, WGS84, Local)
-  - [ ] Test with SiteTrack import (actual end-to-end validation)
-
-- [ ] **Documentation**
-  - [ ] Integration guide provided to users
-  - [ ] Example DXF files included
-  - [ ] Expected output JSON samples provided
-  - [ ] Layer filtering strategy documented
-  - [ ] Troubleshooting guide included
-
----
-
-## Error Troubleshooting
-
-### Import Rejected: "schemaVersion must be 1"
-**Cause**: JSON has `"schemaVersion": 0` or missing.  
-**Fix**: Ensure root object has `"schemaVersion": 1` (integer, not string).
-
-### Import Rejected: "E must be numeric, not string"
-**Cause**: Coordinates are JSON strings instead of numbers.  
-**Example**: `"E": "234567.89"` (invalid) vs. `"E": 234567.89` (valid)  
-**Fix**: Remove quotes around numeric coordinate values.
-
-### Import Rejected: "Point pt-1 referenced in connection but not found in points array"
-**Cause**: A connection references a point ID that doesn't exist.  
-**Example**: 
 ```json
-"points": [{"id": "pt-1", ...}],
-"connections": [{"fromPointId": "pt-999", ...}]  // pt-999 doesn't exist
+{
+  "schemaVersion": 1,
+  "exportedAt": "2025-05-03T12:00:00Z",
+  "sourceFileName": "GPS_Survey.dxf",
+  "coordinateSystemHint": "WGS84",
+  "points": [
+    {
+      "id": "gps-001",
+      "name": "North Survey Marker",
+      "E": -122.4194,
+      "N": 37.7749,
+      "properties": {}
+    },
+    {
+      "id": "gps-002",
+      "name": "South Survey Marker",
+      "E": -122.4180,
+      "N": 37.7730,
+      "properties": {}
+    }
+  ],
+  "connections": []
+}
 ```
-**Fix**: 
-1. Verify all referenced point IDs exist in the `points` array
-2. Check for typos in IDs (case-sensitive)
-3. Ensure topology is built before export
-
-### Import Rejected: "Duplicate point ID: pt-1"
-**Cause**: Two or more points have the same `id`.  
-**Fix**: Ensure each point has a globally unique ID within the export.
-
-### Import Warning: "Orphaned point pt-1 has no connections"
-**Cause**: A point exists but no connection references it (may be intentional).  
-**Recommendation**: 
-- If isolated junctions are valid, ignore warning
-- If point should be connected, add connections or remove the point
-
-### Import Warning: "Coordinate system UTM detected, but coordinates appear to be WGS84"
-**Cause**: Mismatch between declared hint and actual data.  
-**Example**: Declared `"coordinateSystemHint": "UTM"` but coordinates are `E: 35.123, N: 31.987` (WGS84 range)  
-**Fix**: 
-1. Inspect coordinate ranges
-2. Update `coordinateSystemHint` to match actual data
-3. If conversion needed, transform coordinates before export
-
-### File Too Large or Slow Import
-**Cause**: Export contains thousands of points/connections.  
-**Mitigation**:
-- Filter unnecessary layers before export
-- Simplify polylines (reduce vertex count)
-- Split large networks into zone-based sub-projects
-- Use chunked import (if SiteTrack supports)
 
 ---
 
-## References
+## Implementation Checklist for DXF Tool
 
-- **SiteTrack Project**: https://github.com/Kosay/SiteTrack
-- **netDxf Library**: https://github.com/haplokuon/netDxf
-- **JSON Specification**: https://www.json.org
-- **ISO-8601 Dates**: https://en.wikipedia.org/wiki/ISO_8601
+- [ ] Parse DXF file and extract entities (POINT, LINE, POLYLINE, ARC, CIRCLE)
+- [ ] Filter entities by layer name (include only network layers)
+- [ ] For each network point entity:
+  - [ ] Generate unique id (e.g., `pt-001`, `pt-002`, etc.)
+  - [ ] Extract name from DXF entity name or attribute
+  - [ ] Extract X, Y coordinates as numbers (not strings)
+  - [ ] Store original layer name
+  - [ ] Extract optional properties from DXF attributes
+- [ ] For each network connection (LINE, POLYLINE segments):
+  - [ ] Generate unique id (e.g., `conn-001`, `conn-002`, etc.)
+  - [ ] Map start point to fromPointId
+  - [ ] Map end point to toPointId
+  - [ ] Calculate length if not already available
+  - [ ] Extract optional properties from DXF entity
+- [ ] Detect coordinate system (prompt user if ambiguous):
+  - [ ] Check coordinate ranges (WGS84: -180 to +180 for E, -90 to +90 for N)
+  - [ ] Check for UTM zone information in DXF metadata
+  - [ ] Default to "Local" if unable to determine
+- [ ] Generate JSON with:
+  - [ ] schemaVersion: 1 (always)
+  - [ ] exportedAt: current timestamp (ISO 8601)
+  - [ ] sourceFileName: original DXF filename
+  - [ ] coordinateSystemHint: detected coordinate system
+  - [ ] points array: all extracted network points
+  - [ ] connections array: all extracted network connections
+- [ ] Validate before export:
+  - [ ] All points have valid numeric E and N
+  - [ ] All connection fromPointId/toPointId exist
+  - [ ] No duplicate point or connection IDs
+- [ ] Export as connection.json text file
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2026-05-03  
-**Status**: Ready for Integration
+## Integration Steps in SiteTrack UI
+
+1. User navigates to **Projects > Networks > Import Infrastructure**
+2. User selects **"Import from DXF"** and uploads DXF file or connection.json
+3. System detects file type (JSON vs. DXF)
+4. If DXF: Extracts using SiteTrackDxfExtractor tool
+5. If JSON: Validates against schema
+6. Displays preview: "X points, Y connections from layer SEWER_LINES"
+7. User confirms and clicks "Import"
+8. Server imports into Firestore:
+   - Creates `projects/{projectId}/networks/{networkId}` document
+   - Creates `projects/{projectId}/networks/{networkId}/points/{pointId}` documents
+   - Creates `projects/{projectId}/networks/{networkId}/connections/{connId}` documents
+9. Success message: "Imported X points and Y connections from [filename]"
+
+---
+
+## Error Messages & Troubleshooting
+
+### Common User Errors
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `Invalid schemaVersion: 2` | Wrong version in JSON | Ensure schemaVersion is exactly `1` |
+| `References unknown fromPointId "pt-999"` | Connection point doesn't exist | Verify all fromPointId/toPointId match point ids |
+| `Invalid coordinates. Expected numeric E and N, got: E=abc, N=xyz` | Coordinates as strings or text | Ensure E and N are numeric values, not strings |
+| `Missing or invalid 'coordinateSystemHint'` | Invalid coordinate system | Use exactly `"UTM"`, `"WGS84"`, or `"Local"` |
+| `Invalid coordinates at index 2: E and N must be numbers` | Type error in points array | Check data type of all E and N values |
+| `No valid points found in CSV` | Empty points array or all rows invalid | Verify points array has at least one valid point |
+
+### DXF Layer Issues
+
+| Issue | Solution |
+|-------|----------|
+| No networks imported | Check layer names - they may not match network layer filter |
+| Too many extra points | Some non-network layers were included - refine layer filter |
+| Missing connections | Connection entities (LINEs) may be on different layer than points |
+| Duplicate IDs | DXF entities need unique identifiers - ensure ID generation is unique per file |
+
+---
+
+## Testing Connection.json Validity
+
+Use this API endpoint to validate a JSON file before importing:
+
+```bash
+curl -X POST http://localhost:3000/api/network/validate \
+  -H "Content-Type: application/json" \
+  -d @connection.json
+```
+
+Expected response on success:
+```json
+{
+  "valid": true,
+  "pointsCount": 45,
+  "connectionsCount": 52,
+  "sourceFileName": "Infrastructure_Network.dxf",
+  "coordinateSystem": "UTM"
+}
+```
+
+Expected response on validation error:
+```json
+{
+  "valid": false,
+  "pointsCount": 0,
+  "connectionsCount": 0,
+  "sourceFileName": "",
+  "coordinateSystem": "",
+  "errors": [
+    "Point 5 (pt-005): Invalid coordinates. Expected numeric E and N, got: E=abc, N=123"
+  ]
+}
+```
+
+---
+
+## Contact & Support
+
+For questions about SiteTrack's expected format:
+- Review `src/lib/import-connection.ts` for validation logic
+- Check `src/lib/network-import-handlers.ts` for alternative import formats
+- Contact: [SiteTrack project maintainer]
+

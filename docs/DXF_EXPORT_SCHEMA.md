@@ -1,174 +1,152 @@
+
 # DXF Export Schema - Quick Reference
 
-Minimal guide for exporting DXF files as JSON for SiteTrack network import.
-
----
+For SiteTrackDxfExtractor: Output format required by SiteTrack.
 
 ## Minimal Valid Example
 
 ```json
 {
   "schemaVersion": 1,
-  "exportedAt": "2026-05-03T10:30:00Z",
-  "sourceFileName": "network.dxf",
+  "exportedAt": "2025-05-03T14:30:45.123Z",
+  "sourceFileName": "roads.dxf",
   "coordinateSystemHint": "UTM",
   "points": [
-    {"id": "pt-1", "name": "Junction A", "E": 234567.89, "N": 4567890.12},
-    {"id": "pt-2", "name": "Junction B", "E": 234600.00, "N": 4567950.00}
+    {
+      "id": "pt-1",
+      "name": "Junction A",
+      "E": 234567.89,
+      "N": 4567890.12
+    }
+  ],
+  "connections": []
+}
+```
+
+## Required Fields
+
+| Field | Type | Exact Value / Rules |
+|-------|------|---|
+| `schemaVersion` | number | **Always `1`** (not string) |
+| `exportedAt` | string | ISO 8601: `2025-05-03T14:30:45.123Z` |
+| `sourceFileName` | string | Original DXF filename |
+| `coordinateSystemHint` | string | One of: `"UTM"`, `"WGS84"`, `"Local"` |
+| `points[].id` | string | Unique per file (e.g., `pt-1`, `J-001`, `NODE-A`) |
+| `points[].name` | string | Human-readable name |
+| `points[].E` | **number** | NOT a string. X or Easting coordinate. |
+| `points[].N` | **number** | NOT a string. Y or Northing coordinate. |
+| `connections[].id` | string | Unique identifier |
+| `connections[].fromPointId` | string | Must match existing point id |
+| `connections[].toPointId` | string | Must match existing point id |
+
+## Optional Fields
+
+```json
+{
+  "points": [
+    {
+      "id": "pt-1",
+      "name": "MH-001",
+      "E": 234567.89,
+      "N": 4567890.12,
+      "layer": "MANHOLE_ACCESS",
+      "properties": {
+        "elevation": 125.5,
+        "material": "concrete"
+      }
+    }
   ],
   "connections": [
-    {"id": "conn-1", "fromPointId": "pt-1", "toPointId": "pt-2", "length": 75.5}
+    {
+      "id": "conn-1",
+      "fromPointId": "pt-1",
+      "toPointId": "pt-2",
+      "length": 145.67,
+      "properties": {
+        "diameter": "300mm",
+        "type": "gravity_sewer"
+      }
+    }
   ]
 }
 ```
 
----
+## Validation Rules (SiteTrack Enforces)
 
-## Validation Rules
-
-| Rule | Requirement | Impact |
-|---|---|---|
-| schemaVersion | Must be `1` | Import fails if not 1 |
-| E, N | Numeric only (not strings) | Import fails if strings |
-| points array | At least 1 point | Import fails if empty |
-| fromPointId | Must reference existing point | Import fails if not found |
-| toPointId | Must reference existing point | Import fails if not found |
-| Unique IDs | No duplicate point or connection IDs | Import fails if duplicates |
-
----
+- `schemaVersion` must be exactly `1` ✓
+- `coordinateSystemHint` must be `"UTM"`, `"WGS84"`, or `"Local"` ✓
+- E and N must be numbers, not strings ✓
+- All `fromPointId` and `toPointId` must reference existing point ids ✓
+- points array must have at least 1 point ✓
+- connections array can be empty ✓
 
 ## Implementation Tips
 
-1. **Coordinates**: Use at least 2 decimals for UTM/Local, 5-8 for WGS84
-2. **Names**: Keep human-readable and descriptive (e.g., "MH-001", "Junction A")
-3. **Metadata**: Use `properties` object for optional fields (slope, diameter, etc.)
-4. **Dates**: Always use ISO-8601 with timezone (e.g., `"2026-05-03T10:30:00Z"`)
-5. **Layer Names**: Include original DXF layer names in the `layer` field for traceability
+1. **IDs**: Keep them simple and unique within file (e.g., `pt-001`, `pt-002`, ...)
+2. **Names**: Extract from DXF attribute or entity name
+3. **E/N**: Ensure output as `parseFloat()` result, not string
+4. **Layer Filtering**: Only include points/connections from network layers
+   - Include: `SEWER*`, `WATER*`, `STORMWATER*`, `MANHOLE*`, `JUNCTION*`, etc.
+   - Exclude: `ANNOTATION*`, `HATCH*`, `BUILDING*`, `PROPERTY*`, etc.
+5. **Timestamp**: Use `new Date().toISOString()`
+6. **Coordinate System**: Detect from DXF metadata or prompt user
 
----
-
-## Real-World Example: Road Network
+## Example from Road Network
 
 ```json
 {
   "schemaVersion": 1,
-  "exportedAt": "2026-05-03T14:00:00Z",
-  "sourceFileName": "city_roads.dxf",
-  "coordinateSystemHint": "WGS84",
+  "exportedAt": "2025-05-03T15:00:00.000Z",
+  "sourceFileName": "City_Roads_2025.dxf",
+  "coordinateSystemHint": "UTM",
   "points": [
     {
-      "id": "RJ-001",
-      "name": "Main St & 5th Ave",
-      "E": 35.123456,
-      "N": 31.987654,
-      "layer": "ROAD_INTERSECTION",
-      "properties": {"type": "intersection"}
+      "id": "intersection-1",
+      "name": "Main St & Oak Ave",
+      "E": 450000.0,
+      "N": 5500000.0,
+      "layer": "ROAD_INTERSECTIONS"
     },
     {
-      "id": "RJ-002",
-      "name": "Main St & 6th Ave",
-      "E": 35.124500,
-      "N": 31.988000,
-      "layer": "ROAD_INTERSECTION",
-      "properties": {"type": "intersection"}
-    },
-    {
-      "id": "RJ-003",
-      "name": "5th Ave & Park St",
-      "E": 35.123500,
-      "N": 31.989000,
-      "layer": "ROAD_INTERSECTION",
-      "properties": {"type": "intersection"}
+      "id": "intersection-2",
+      "name": "Main St & Elm Ave",
+      "E": 450150.0,
+      "N": 5500100.0,
+      "layer": "ROAD_INTERSECTIONS"
     }
   ],
   "connections": [
     {
-      "id": "ROAD-001",
-      "fromPointId": "RJ-001",
-      "toPointId": "RJ-002",
-      "length": 123.5,
+      "id": "road-segment-1",
+      "fromPointId": "intersection-1",
+      "toPointId": "intersection-2",
+      "length": 158.11,
       "properties": {
-        "name": "Main Street",
-        "width": 12.0,
-        "surface": "asphalt",
-        "lanes": 2
-      }
-    },
-    {
-      "id": "ROAD-002",
-      "fromPointId": "RJ-001",
-      "toPointId": "RJ-003",
-      "length": 98.3,
-      "properties": {
-        "name": "5th Avenue",
-        "width": 10.0,
-        "surface": "asphalt",
-        "lanes": 2
+        "road_name": "Main Street",
+        "speed_limit_mph": 35
       }
     }
   ]
 }
 ```
 
----
+## File Output
 
-## File Output Instructions
+Save as `connection.json` (or `{filename}_network.json`)
 
-When exporting from the DXF tool:
+Then upload to SiteTrack admin panel:
+- Projects > Networks > Import Infrastructure > Select connection.json
 
-1. **File naming**: Use pattern `<dxf-name>_network.json`
-   - Example: `sewer_network.dxf` → `sewer_network_network.json`
+## Validation Endpoint (Optional Pre-Check)
 
-2. **Encoding**: UTF-8 without BOM
+```bash
+curl -X POST http://sitetrack.local/api/network/validate-json \
+  -H "Content-Type: application/json" \
+  -d @connection.json
+```
 
-3. **Formatting**: Pretty-printed JSON (2-space indentation) for readability
-
-4. **Character escaping**: 
-   - Quotes in strings: `\"` 
-   - Newlines: `\n`
-   - Backslashes: `\\`
-
-5. **Validation**: Before writing, ensure:
-   - All coordinates are valid numbers
-   - All point references are valid
-   - No duplicate IDs
-   - JSON syntax is correct
+Response: `{ valid: true, pointsCount: 45, connectionsCount: 52, ... }`
 
 ---
 
-## Common Fields Reference
-
-**Points:**
-- `id`: Unique identifier (required)
-- `name`: Human-readable name (required)
-- `E`: Easting/Longitude (required, numeric)
-- `N`: Northing/Latitude (required, numeric)
-- `layer`: DXF source layer (optional)
-- `properties`: Additional metadata as object (optional)
-
-**Connections:**
-- `id`: Unique identifier (required)
-- `fromPointId`: Start point reference (required)
-- `toPointId`: End point reference (required)
-- `length`: Distance in meters/degrees (optional)
-- `properties`: Metadata object with optional fields:
-  - `slope`: Decimal percentage
-  - `diameter`: Numeric (usually mm)
-  - `material`: String (e.g., "PVC", "concrete")
-  - Any other custom fields
-
----
-
-## Troubleshooting
-
-| Issue | Check |
-|---|---|
-| Import fails immediately | Validate JSON syntax using https://jsonlint.com |
-| "Invalid schemaVersion" | Ensure `"schemaVersion": 1` (integer) |
-| "Coordinate must be numeric" | Remove quotes: `"E": 234567.89` not `"E": "234567.89"` |
-| "Point not found" | Verify all `fromPointId` and `toPointId` reference existing point `id` |
-| "Duplicate ID" | Check point and connection `id` fields for duplicates |
-
----
-
-**For detailed guidance**, see [DXF_INTEGRATION_GUIDE.md](../DXF_INTEGRATION_GUIDE.md)
+**Reference**: Full validation logic in `src/lib/import-connection.ts`
